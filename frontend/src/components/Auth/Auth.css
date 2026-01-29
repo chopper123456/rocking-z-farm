@@ -1,0 +1,141 @@
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.auth-card {
+  background: var(--white);
+  border-radius: 20px;
+  box-shadow: 0 10px 40px var(--shadow);
+  max-width: 450px;
+  width: 100%;
+  overflow: hidden;
+  animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.auth-header {
+  background: linear-gradient(135deg, var(--earth-dark) 0%, var(--earth-mid) 100%);
+  color: var(--white);
+  padding: 2.5rem 2rem;
+  text-align: center;
+}
+
+.auth-header h1 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.5rem;
+  letter-spacing: 2px;
+  margin-bottom: 0.5rem;
+}
+
+.auth-header p {
+  opacity: 0.9;
+  font-size: 0.95rem;
+}
+
+.auth-form {
+  padding: 2.5rem 2rem;
+}
+
+.auth-form h2 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.75rem;
+  color: var(--earth-dark);
+  margin-bottom: 1.5rem;
+  letter-spacing: 1px;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #555;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.2s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--earth-mid);
+  box-shadow: 0 0 0 3px rgba(74, 124, 89, 0.1);
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 1rem;
+  background: linear-gradient(135deg, var(--earth-dark) 0%, var(--earth-mid) 100%);
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  margin-top: 0.5rem;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px var(--shadow);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error-message {
+  background: #fee;
+  border-left: 4px solid #c33;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  border-radius: 4px;
+  color: #c33;
+  font-size: 0.9rem;
+}
+
+.auth-switch {
+  text-align: center;
+  margin-top: 1.5rem;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.auth-switch a {
+  color: var(--earth-mid);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.auth-switch a:hover {
+  text-decoration: underline;
+}

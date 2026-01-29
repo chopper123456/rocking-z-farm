@@ -1,0 +1,102 @@
+.app-header {
+  background: linear-gradient(135deg, var(--earth-dark) 0%, var(--earth-mid) 100%);
+  color: var(--white);
+  padding: 1.5rem 1.25rem;
+  box-shadow: 0 4px 20px var(--shadow);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  animation: slideDown 0.4s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.app-header h1 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.5rem;
+  font-weight: 400;
+  letter-spacing: 2px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  background: var(--wheat);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.farm-name {
+  color: var(--wheat);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-name {
+  font-size: 0.95rem;
+  opacity: 0.95;
+}
+
+.btn-logout {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--white);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  padding: 0.5rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-logout:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+@media (max-width: 768px) {
+  .app-header h1 {
+    font-size: 2rem;
+  }
+  
+  .user-name {
+    display: none;
+  }
+}

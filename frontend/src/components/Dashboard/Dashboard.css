@@ -1,0 +1,145 @@
+.app-container {
+  max-width: 100%;
+  margin: 0 auto;
+  min-height: 100vh;
+}
+
+.home-screen {
+  padding: 1.5rem 1.25rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  animation: fadeIn 0.5s ease-out 0.2s both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.welcome-card {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 1.75rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 20px var(--shadow);
+  border-left: 4px solid var(--wheat);
+}
+
+.welcome-card h2 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.75rem;
+  color: var(--earth-dark);
+  margin-bottom: 0.5rem;
+  letter-spacing: 1px;
+}
+
+.welcome-card p {
+  color: #666;
+  line-height: 1.6;
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.module-card {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 15px var(--shadow);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.module-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, var(--earth-mid), var(--wheat));
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.module-card:hover::before {
+  transform: scaleX(1);
+}
+
+.module-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 30px var(--shadow);
+  border-color: var(--earth-light);
+}
+
+.module-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+
+.module-card h3 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.5rem;
+  color: var(--earth-dark);
+  margin-bottom: 0.5rem;
+  font-weight: 400;
+  letter-spacing: 1px;
+}
+
+.module-card p {
+  color: #666;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.info-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.25rem;
+  margin-top: 2rem;
+}
+
+.info-card {
+  background: linear-gradient(135deg, var(--earth-dark) 0%, var(--earth-mid) 100%);
+  color: var(--white);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 15px var(--shadow);
+}
+
+.info-card h3 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.3rem;
+  margin-bottom: 0.75rem;
+  letter-spacing: 1px;
+}
+
+.info-card p {
+  line-height: 1.6;
+  opacity: 0.95;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+  .module-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .info-section {
+    grid-template-columns: 1fr;
+  }
+}

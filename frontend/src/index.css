@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+:root {
+  --earth-dark: #2a5a2e;
+  --earth-mid: #4a7c59;
+  --earth-light: #87a96b;
+  --soil: #8b6f47;
+  --wheat: #f4d03f;
+  --sky: #e8f4f8;
+  --white: #ffffff;
+  --shadow: rgba(42, 90, 46, 0.15);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: linear-gradient(135deg, var(--sky) 0%, #ffffff 100%);
+  min-height: 100vh;
+  color: #333;
+  overflow-x: hidden;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(42, 90, 46, 0.02) 2px, rgba(42, 90, 46, 0.02) 4px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+#root {
+  position: relative;
+  z-index: 2;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+input, textarea, select {
+  font-family: inherit;
+}
