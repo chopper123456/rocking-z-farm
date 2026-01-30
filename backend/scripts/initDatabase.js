@@ -1,11 +1,25 @@
-const db = require('../config/database');
+const { Pool } = require('pg');
+require('dotenv').config();
+
+// Use DATABASE_URL if available (Railway), otherwise use individual variables (local)
+const pool = process.env.DATABASE_URL 
+  ? new Pool({
+      connectionString: process.env.DATABASE_URL,
+    })
+  : new Pool({
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT) || 5432,
+      database: process.env.DB_NAME,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+    });
 
 const initDatabase = async () => {
   try {
     console.log('Initializing database...');
 
     // Create Users table
-    await db.query(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
@@ -19,7 +33,7 @@ const initDatabase = async () => {
     console.log('✓ Users table created');
 
     // Create Livestock table
-    await db.query(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS livestock (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -38,7 +52,7 @@ const initDatabase = async () => {
     console.log('✓ Livestock table created');
 
     // Create Fields table
-    await db.query(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS fields (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -53,8 +67,8 @@ const initDatabase = async () => {
     `);
     console.log('✓ Fields table created');
 
-    // Create Field Reports table (for soil tests, tissue samples, etc.)
-    await db.query(`
+    // Create Field Reports table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS field_reports (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -73,7 +87,7 @@ const initDatabase = async () => {
     console.log('✓ Field Reports table created');
 
     // Create Equipment table
-    await db.query(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS equipment (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -88,7 +102,7 @@ const initDatabase = async () => {
     console.log('✓ Equipment table created');
 
     // Create Grain Inventory table
-    await db.query(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS grain_inventory (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -104,7 +118,7 @@ const initDatabase = async () => {
     console.log('✓ Grain Inventory table created');
 
     // Create General Inventory table
-    await db.query(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS inventory (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -120,8 +134,8 @@ const initDatabase = async () => {
     `);
     console.log('✓ Inventory table created');
 
-    // Create John Deere Data table (for future API integration)
-    await db.query(`
+    // Create John Deere Data table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS john_deere_data (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -132,10 +146,10 @@ const initDatabase = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log('✓ John Deere Data table created (ready for future integration)');
+    console.log('✓ John Deere Data table created');
 
-    // Create indexes for better performance
-    await db.query(`
+    // Create indexes
+    await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_livestock_user_id ON livestock(user_id);
       CREATE INDEX IF NOT EXISTS idx_fields_user_id ON fields(user_id);
       CREATE INDEX IF NOT EXISTS idx_field_reports_user_id ON field_reports(user_id);
@@ -148,9 +162,11 @@ const initDatabase = async () => {
     console.log('✓ Indexes created');
 
     console.log('\n✓ Database initialization complete!');
+    await pool.end();
     process.exit(0);
   } catch (error) {
     console.error('✗ Error initializing database:', error);
+    await pool.end();
     process.exit(1);
   }
 };
