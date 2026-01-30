@@ -34,30 +34,17 @@ router.post('/register', [
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Insert user
+    // Insert user (pending approval by default)
     const result = await db.query(
-      'INSERT INTO users (username, email, password_hash, farm_name) VALUES ($1, $2, $3, $4) RETURNING id, username, email, farm_name',
+      'INSERT INTO users (username, email, password_hash, farm_name, approved) VALUES ($1, $2, $3, $4, false) RETURNING id, username, email, farm_name, approved',
       [username, email, passwordHash, farmName || null]
     );
 
     const user = result.rows[0];
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id, username: user.username },
-      process.env.JWT_SECRET,
-      { expiresIn: '30d' }
-    );
-
+    // Don't generate token for unapproved users
     res.status(201).json({
-      message: 'User registered successfully',
-      token,
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        farmName: user.farm_name
-      }
+      message: 'Registration successful! Your account is pending approval. You will be able to login once an administrator approves your account.'
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -90,6 +77,11 @@ router.post('/login', [
 
     const user = result.rows[0];
 
+    // Check if user is approved
+    if (!user.approved) {
+      return res.status(403).json({ error: 'Your account is pending approval. Please wait for an administrator to approve your account.' });
+    }
+
     // Verify password
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
@@ -98,7 +90,7 @@ router.post('/login', [
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, username: user.username },
+      { userId: user.id, username: user.username, isAdmin: user.is_admin },
       process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );
@@ -110,7 +102,8 @@ router.post('/login', [
         id: user.id,
         username: user.username,
         email: user.email,
-        farmName: user.farm_name
+        farmName: user.farm_name,
+        isAdmin: user.is_admin
       }
     });
   } catch (error) {
