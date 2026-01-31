@@ -10,17 +10,32 @@ const JD_TOKEN_URL = 'https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/v
 const JD_API_URL = 'https://sandboxapi.deere.com/platform';
 
 // Initiate OAuth flow - Connect to John Deere
-router.get('/connect', authMiddleware, (req, res) => {
-  const state = req.user.userId; // Use user ID as state for security
-  
-  const authUrl = `${JD_AUTH_URL}?` +
-    `client_id=${process.env.JOHN_DEERE_CLIENT_ID}` +
-    `&response_type=code` +
-    `&scope=ag1 ag2 ag3 eq1 eq2 org1 org2 files` +
-    `&redirect_uri=${encodeURIComponent(process.env.JOHN_DEERE_CALLBACK_URL)}` +
-    `&state=${state}`;
-  
-  res.redirect(authUrl);
+router.get('/connect', async (req, res) => {
+  try {
+    // Get token from query string or header
+    const token = req.query.token || req.header('Authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ error: 'No authentication token provided' });
+    }
+
+    // Verify and decode token
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+    
+    const authUrl = `${JD_AUTH_URL}?` +
+      `client_id=${process.env.JOHN_DEERE_CLIENT_ID}` +
+      `&response_type=code` +
+      `&scope=ag1 ag2 ag3 eq1 eq2 org1 org2 files` +
+      `&redirect_uri=${encodeURIComponent(process.env.JOHN_DEERE_CALLBACK_URL)}` +
+      `&state=${userId}`;
+    
+    res.redirect(authUrl);
+  } catch (error) {
+    console.error('Connect error:', error);
+    res.status(401).json({ error: 'Invalid token' });
+  }
 });
 
 // OAuth callback - Receive authorization code
