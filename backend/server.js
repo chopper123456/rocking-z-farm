@@ -8,11 +8,14 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: [
-    'https://rocking-z-farm.vercel.app',
-    'https://rocking-z-farm-44gx2tbmx-rocking-z-acres.vercel.app',
-    'http://localhost:3000'
-  ],
+  origin: function(origin, callback) {
+    // Allow all Vercel domains and localhost
+    if (!origin || origin.includes('vercel.app') || origin.includes('localhost')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
