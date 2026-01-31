@@ -6,14 +6,7 @@ function Dashboard({ user, onLogout }) {
   const navigate = useNavigate();
 
   const modules = [
-    {
-      id: 'livestock',
-      icon: '🐄',
-      title: 'Livestock',
-      description: 'Track and manage your livestock records',
-      path: '/livestock',
-    },
-    {
+        {
       id: 'fields',
       icon: '🌾',
       title: 'Fields',
