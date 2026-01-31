@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../../utils/api';
 import './Auth.css';
 
 function Login({ onLogin }) {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    email: '',
+    username: '',
     password: '',
   });
   const [error, setError] = useState('');
@@ -39,25 +39,26 @@ function Login({ onLogin }) {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <h1>🌾 Rocking Z</h1>
+          <h1>🌾 Rocking Z Acres</h1>
           <p>Farm Management System</p>
         </div>
         
         <form onSubmit={handleSubmit} className="auth-form">
-          <h2>Welcome Back</h2>
+          <h2>Login</h2>
           
           {error && <div className="error-message">{error}</div>}
           
           <div className="form-group">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="username">Username</label>
             <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
+              type="text"
+              id="username"
+              name="username"
+              value={formData.username}
               onChange={handleChange}
               required
-              autoComplete="email"
+              autoComplete="username"
+              placeholder="farm"
             />
           </div>
           
@@ -78,8 +79,9 @@ function Login({ onLogin }) {
             {loading ? 'Logging in...' : 'Login'}
           </button>
           
-          <p className="auth-switch">
-            Don't have an account? <Link to="/register">Register here</Link>
+          <p className="auth-info" style={{ marginTop: '1.5rem', textAlign: 'center', color: '#666', fontSize: '0.9rem' }}>
+            Username: <strong>farm</strong><br />
+            Password: <strong>RockingZ2024</strong>
           </p>
         </form>
       </div>
