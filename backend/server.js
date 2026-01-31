@@ -23,6 +23,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/john-deere', require('./routes/johnDeere'));
 app.use('/api/livestock', require('./routes/livestock'));
 app.use('/api/fields', require('./routes/fields'));
 app.use('/api/field-reports', require('./routes/fieldReports'));
