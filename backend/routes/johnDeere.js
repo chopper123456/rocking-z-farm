@@ -113,9 +113,12 @@ router.get('/callback', async (req, res) => {
 // Check connection status
 router.get('/status', authMiddleware, async (req, res) => {
   try {
+    // Use fixed userId since everyone shares the farm account
+    const userId = 1;
+    
     const result = await db.query(
       'SELECT expires_at FROM john_deere_tokens WHERE user_id = $1',
-      [req.user.userId]
+      [userId]
     );
     
     if (result.rows.length === 0) {
@@ -138,10 +141,13 @@ router.get('/status', authMiddleware, async (req, res) => {
 // Sync fields from John Deere
 router.post('/sync/fields', authMiddleware, async (req, res) => {
   try {
+    // Use fixed userId since everyone shares the farm account
+    const userId = 1;
+    
     // Get access token
     const tokenResult = await db.query(
       'SELECT access_token FROM john_deere_tokens WHERE user_id = $1',
-      [req.user.userId]
+      [userId]
     );
     
     if (tokenResult.rows.length === 0) {
@@ -186,7 +192,7 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
           // Check if field already exists
           const existing = await db.query(
             'SELECT id FROM fields WHERE field_name = $1 AND user_id = $2',
-            [field.name, req.user.userId]
+            [field.name, userId]
           );
           
           if (existing.rows.length === 0) {
@@ -195,7 +201,7 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
               INSERT INTO fields (user_id, field_name, acreage, notes)
               VALUES ($1, $2, $3, $4)
             `, [
-              req.user.userId,
+              userId,
               field.name,
               field.area?.value || null,
               `Imported from John Deere on ${new Date().toLocaleDateString()}`
@@ -207,7 +213,7 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
           await db.query(`
             INSERT INTO john_deere_data (user_id, data_type, field_name, sync_date, raw_data)
             VALUES ($1, $2, $3, NOW(), $4)
-          `, [req.user.userId, 'field', field.name, JSON.stringify(field)]);
+          `, [userId, 'field', field.name, JSON.stringify(field)]);
           
         } catch (fieldError) {
           console.error('Error importing field:', field.name, fieldError);
@@ -233,9 +239,12 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
 // Disconnect John Deere
 router.delete('/disconnect', authMiddleware, async (req, res) => {
   try {
+    // Use fixed userId since everyone shares the farm account
+    const userId = 1;
+    
     await db.query(
       'DELETE FROM john_deere_tokens WHERE user_id = $1',
-      [req.user.userId]
+      [userId]
     );
     
     res.json({ message: 'John Deere disconnected successfully' });
