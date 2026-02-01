@@ -218,32 +218,49 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
     
     console.log('Organizations API response:', JSON.stringify(orgsResponse.data, null, 2));
     
-    // Check each organization for connections link
+    // Find an organization that doesn't have a connections link (meaning it's enabled)
+    let enabledOrg = null;
+    const orgsNeedingAccess = [];
+    
     if (orgsResponse.data.values && orgsResponse.data.values.length > 0) {
       for (const org of orgsResponse.data.values) {
         const connectionsLink = org.links?.find(link => link.rel === 'connections');
+        
         if (connectionsLink) {
-          console.log('CONNECTIONS LINK FOUND:', connectionsLink.uri);
-          return res.status(403).json({
-            error: 'Organization access not enabled',
-            connectionsUrl: connectionsLink.uri,
-            message: `You need to visit this URL to enable organization access: ${connectionsLink.uri}`,
-            orgName: org.name
+          // This org needs access enabled
+          orgsNeedingAccess.push({
+            name: org.name,
+            connectionsUrl: connectionsLink.uri
           });
+        } else {
+          // This org is enabled! Use it
+          enabledOrg = org;
+          break;
         }
       }
     }
     
-    // If we get here, no connections link found - organization access is enabled
-    if (!orgsResponse.data.values || orgsResponse.data.values.length === 0) {
+    // If we found orgs that need access but no enabled org, show the connections URLs
+    if (!enabledOrg && orgsNeedingAccess.length > 0) {
+      console.log('Organizations need access enabled:', orgsNeedingAccess);
+      return res.status(403).json({
+        error: 'Organization access not enabled',
+        connectionsUrl: orgsNeedingAccess[0].connectionsUrl,
+        message: `You need to enable organization access for: ${orgsNeedingAccess.map(o => o.name).join(', ')}`,
+        organizations: orgsNeedingAccess
+      });
+    }
+    
+    // If we have no organizations at all
+    if (!enabledOrg) {
       return res.json({ 
-        message: 'No organizations found',
+        message: 'No organizations found or accessible',
         fieldsAdded: 0 
       });
     }
     
-    const orgId = orgsResponse.data.values[0].id;
-    console.log('Organization access enabled! Using org:', orgId);
+    const orgId = enabledOrg.id;
+    console.log('Using enabled organization:', enabledOrg.name, 'ID:', orgId);
     let fieldsAdded = 0;
     
     // Get fields for the organization
