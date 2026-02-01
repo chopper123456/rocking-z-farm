@@ -11,7 +11,13 @@ const authMiddleware = (req, res, next) => {
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+    
+    // Since everyone shares the farm account, always use userId = 1
+    req.user = {
+      ...decoded,
+      userId: 1
+    };
+    
     next();
   } catch (error) {
     res.status(401).json({ error: 'Token is not valid' });
