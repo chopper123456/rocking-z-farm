@@ -138,6 +138,57 @@ router.get('/status', authMiddleware, async (req, res) => {
   }
 });
 
+// Get connections URL
+router.get('/connections-url', authMiddleware, async (req, res) => {
+  try {
+    const userId = 1;
+    
+    const tokenResult = await db.query(
+      'SELECT access_token FROM john_deere_tokens WHERE user_id = $1',
+      [userId]
+    );
+    
+    if (tokenResult.rows.length === 0) {
+      return res.status(400).json({ error: 'John Deere not connected' });
+    }
+    
+    const accessToken = tokenResult.rows[0].access_token;
+    
+    // Get organizations to find connections link
+    const orgsResponse = await axios.get(`${JD_API_URL}/organizations`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/vnd.deere.axiom.v3+json'
+      }
+    });
+    
+    console.log('Organizations response for connections URL:', JSON.stringify(orgsResponse.data, null, 2));
+    
+    const connectionsLink = orgsResponse.data.links?.find(link => link.rel === 'connections');
+    
+    if (connectionsLink) {
+      return res.json({
+        hasConnectionsLink: true,
+        connectionsUrl: connectionsLink.uri,
+        message: 'You need to visit this URL to enable organization access'
+      });
+    }
+    
+    return res.json({
+      hasConnectionsLink: false,
+      organizations: orgsResponse.data.values?.length || 0,
+      message: 'Organization access already enabled or no organizations found'
+    });
+    
+  } catch (error) {
+    console.error('Connections URL error:', error.response?.data || error.message);
+    res.status(500).json({ 
+      error: 'Failed to get connections URL',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
 // Sync fields from John Deere
 router.post('/sync/fields', authMiddleware, async (req, res) => {
   try {
@@ -156,8 +207,8 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
     
     const accessToken = tokenResult.rows[0].access_token;
     
-    // Get organizations
-    console.log('Fetching organizations...');
+    // Get organizations - THIS is where we check for connections link
+    console.log('Fetching organizations to check for connections link...');
     const orgsResponse = await axios.get(`${JD_API_URL}/organizations`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -165,21 +216,25 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
       }
     });
     
-    console.log('Full organizations response:', JSON.stringify(orgsResponse.data, null, 2));
+    console.log('Organizations API response:', JSON.stringify(orgsResponse.data, null, 2));
     
-    // Check if we need to enable organization access
-    if (orgsResponse.data.links) {
-      const connectionsLink = orgsResponse.data.links.find(link => link.rel === 'connections');
-      if (connectionsLink) {
-        console.log('Connections link found:', connectionsLink.uri);
-        return res.status(403).json({ 
-          error: 'Organization access required',
-          connectionsUrl: connectionsLink.uri,
-          message: 'You need to enable organization access. Visit: ' + connectionsLink.uri
-        });
+    // Check each organization for connections link
+    if (orgsResponse.data.values && orgsResponse.data.values.length > 0) {
+      for (const org of orgsResponse.data.values) {
+        const connectionsLink = org.links?.find(link => link.rel === 'connections');
+        if (connectionsLink) {
+          console.log('CONNECTIONS LINK FOUND:', connectionsLink.uri);
+          return res.status(403).json({
+            error: 'Organization access not enabled',
+            connectionsUrl: connectionsLink.uri,
+            message: `You need to visit this URL to enable organization access: ${connectionsLink.uri}`,
+            orgName: org.name
+          });
+        }
       }
     }
     
+    // If we get here, no connections link found - organization access is enabled
     if (!orgsResponse.data.values || orgsResponse.data.values.length === 0) {
       return res.json({ 
         message: 'No organizations found',
@@ -188,6 +243,7 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
     }
     
     const orgId = orgsResponse.data.values[0].id;
+    console.log('Organization access enabled! Using org:', orgId);
     let fieldsAdded = 0;
     
     // Get fields for the organization
