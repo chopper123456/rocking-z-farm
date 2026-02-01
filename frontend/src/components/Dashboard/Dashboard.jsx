@@ -65,7 +65,18 @@ function Dashboard({ user, onLogout }) {
       }
     } catch (error) {
       console.error('Sync error:', error);
-      alert('❌ Failed to sync fields. Please try again.');
+      
+      // Check if error response has connections URL
+      if (error.response?.data?.connectionsUrl) {
+        const connectionsUrl = error.response.data.connectionsUrl;
+        const message = error.response.data.message || 'You need to enable organization access';
+        
+        if (window.confirm(`${message}\n\nClick OK to open the connections page in a new tab.`)) {
+          window.open(connectionsUrl, '_blank');
+        }
+      } else {
+        alert(`❌ Failed to sync fields.\n\n${error.response?.data?.message || error.message || 'Please try again.'}`);
+      }
     } finally {
       setSyncing(false);
     }
