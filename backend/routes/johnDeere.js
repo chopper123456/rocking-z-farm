@@ -23,13 +23,10 @@ router.get('/connect', async (req, res) => {
     const jwt = require('jsonwebtoken');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log('Decoded JWT:', decoded);
-    const userId = decoded.userId;
-    console.log('User ID from token:', userId);
     
-    if (!userId) {
-      console.error('No userId in JWT token');
-      return res.status(401).json({ error: 'Invalid token - no userId' });
-    }
+    // For the simple login, we just use a fixed user ID since everyone shares one account
+    const userId = 1; // Fixed user ID for shared farm account
+    console.log('Using fixed user ID:', userId);
     
     const authUrl = `${JD_AUTH_URL}?` +
       `client_id=${process.env.JOHN_DEERE_CLIENT_ID}` +
