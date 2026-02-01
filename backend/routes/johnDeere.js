@@ -157,12 +157,28 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
     const accessToken = tokenResult.rows[0].access_token;
     
     // Get organizations
+    console.log('Fetching organizations...');
     const orgsResponse = await axios.get(`${JD_API_URL}/organizations`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Accept': 'application/vnd.deere.axiom.v3+json'
       }
     });
+    
+    console.log('Full organizations response:', JSON.stringify(orgsResponse.data, null, 2));
+    
+    // Check if we need to enable organization access
+    if (orgsResponse.data.links) {
+      const connectionsLink = orgsResponse.data.links.find(link => link.rel === 'connections');
+      if (connectionsLink) {
+        console.log('Connections link found:', connectionsLink.uri);
+        return res.status(403).json({ 
+          error: 'Organization access required',
+          connectionsUrl: connectionsLink.uri,
+          message: 'You need to enable organization access. Visit: ' + connectionsLink.uri
+        });
+      }
+    }
     
     if (!orgsResponse.data.values || orgsResponse.data.values.length === 0) {
       return res.json({ 
