@@ -263,20 +263,34 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
     console.log('Using enabled organization:', enabledOrg.name, 'ID:', orgId);
     let fieldsAdded = 0;
     
-    // Get fields for the organization
-    const fieldsResponse = await axios.get(
-      `${JD_API_URL}/organizations/${orgId}/fields`,
-      {
+    // Get fields for the organization (with pagination)
+    let allFields = [];
+    let nextPageUrl = `${JD_API_URL}/organizations/${orgId}/fields`;
+    
+    while (nextPageUrl) {
+      console.log('Fetching fields from:', nextPageUrl);
+      const fieldsResponse = await axios.get(nextPageUrl, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Accept': 'application/vnd.deere.axiom.v3+json'
         }
+      });
+      
+      if (fieldsResponse.data.values) {
+        allFields = allFields.concat(fieldsResponse.data.values);
+        console.log(`Fetched ${fieldsResponse.data.values.length} fields, total so far: ${allFields.length}`);
       }
-    );
+      
+      // Check for next page
+      const nextPageLink = fieldsResponse.data.links?.find(link => link.rel === 'nextPage');
+      nextPageUrl = nextPageLink?.uri || null;
+    }
+    
+    console.log(`Total fields found: ${allFields.length}`);
     
     // Import fields into database
-    if (fieldsResponse.data.values) {
-      for (const field of fieldsResponse.data.values) {
+    if (allFields.length > 0) {
+      for (const field of allFields) {
         try {
           // Check if field already exists
           const existing = await db.query(
@@ -313,7 +327,7 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
     res.json({ 
       message: `Successfully synced ${fieldsAdded} new fields from John Deere`,
       fieldsAdded: fieldsAdded,
-      totalFields: fieldsResponse.data.values?.length || 0
+      totalFields: allFields.length
     });
     
   } catch (error) {
