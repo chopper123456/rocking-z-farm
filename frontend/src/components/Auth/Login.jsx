@@ -58,7 +58,6 @@ function Login({ onLogin }) {
               onChange={handleChange}
               required
               autoComplete="username"
-              placeholder="farm"
             />
           </div>
           
@@ -78,11 +77,6 @@ function Login({ onLogin }) {
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? 'Logging in...' : 'Login'}
           </button>
-          
-          <p className="auth-info" style={{ marginTop: '1.5rem', textAlign: 'center', color: '#666', fontSize: '0.9rem' }}>
-            Username: <strong>farm</strong><br />
-            Password: <strong>RockingZ2024</strong>
-          </p>
         </form>
       </div>
     </div>

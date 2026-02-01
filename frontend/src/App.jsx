@@ -1,8 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import Login from './components/Auth/Login';
-import Register from './components/Auth/Register';
 import Dashboard from './components/Dashboard/Dashboard';
+import AdminPanel from './components/Admin/AdminPanel';
 import LivestockModule from './components/Modules/LivestockModule';
 import FieldsModule from './components/Modules/FieldsModule';
 import EquipmentModule from './components/Modules/EquipmentModule';
@@ -66,19 +66,19 @@ function App() {
             <Login onLogin={handleLogin} />
           } 
         />
-        <Route 
-          path="/register" 
-          element={
-            isAuthenticated ? 
-            <Navigate to="/" replace /> : 
-            <Register onRegister={handleLogin} />
-          } 
-        />
         <Route
           path="/"
           element={
             isAuthenticated ? 
             <Dashboard user={user} onLogout={handleLogout} /> : 
+            <Navigate to="/login" replace />
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            isAuthenticated ? 
+            <AdminPanel user={user} onLogout={handleLogout} /> : 
             <Navigate to="/login" replace />
           }
         />

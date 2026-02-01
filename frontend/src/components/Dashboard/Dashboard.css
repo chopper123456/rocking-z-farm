@@ -44,6 +44,26 @@
   line-height: 1.6;
 }
 
+.admin-button {
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #4a7c59, #3a6349);
+  color: var(--white);
+  border: none;
+  border-radius: 12px;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.1rem;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px rgba(74, 124, 89, 0.3);
+}
+
+.admin-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(74, 124, 89, 0.4);
+}
+
 .jd-integration-card {
   background: var(--white);
   border-radius: 16px;

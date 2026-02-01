@@ -137,10 +137,18 @@ function Dashboard({ user, onLogout }) {
       
       <div className="home-screen">
         <div className="welcome-card">
-          <h2>Welcome back! 👋</h2>
+          <h2>Welcome back, {user?.username}! 👋</h2>
           <p>
             {user?.farmName ? `Managing ${user.farmName}` : 'Manage your farm operations efficiently with Rocking Z Acres.'}
           </p>
+          {user?.isAdmin && (
+            <button 
+              className="admin-button"
+              onClick={() => navigate('/admin')}
+            >
+              👨‍💼 Admin Panel
+            </button>
+          )}
         </div>
 
         {/* John Deere Integration Section */}
