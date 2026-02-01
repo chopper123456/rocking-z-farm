@@ -22,7 +22,14 @@ router.get('/connect', async (req, res) => {
     // Verify and decode token
     const jwt = require('jsonwebtoken');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('Decoded JWT:', decoded);
     const userId = decoded.userId;
+    console.log('User ID from token:', userId);
+    
+    if (!userId) {
+      console.error('No userId in JWT token');
+      return res.status(401).json({ error: 'Invalid token - no userId' });
+    }
     
     const authUrl = `${JD_AUTH_URL}?` +
       `client_id=${process.env.JOHN_DEERE_CLIENT_ID}` +
@@ -40,11 +47,26 @@ router.get('/connect', async (req, res) => {
 
 // OAuth callback - Receive authorization code
 router.get('/callback', async (req, res) => {
-  const { code, state } = req.query;
-  const userId = state;
+  const { code, state, error } = req.query;
+  
+  console.log('OAuth callback - State:', state, 'Code:', code ? 'present' : 'missing');
+  
+  if (error) {
+    console.error('OAuth error from JD:', error);
+    return res.redirect('https://rocking-z-farm.vercel.app?jd_error=denied');
+  }
   
   if (!code) {
+    console.error('No code in callback');
     return res.redirect('https://rocking-z-farm.vercel.app?jd_error=no_code');
+  }
+  
+  // State should contain userId, but if it's missing, we can't continue
+  const userId = state && state !== 'undefined' ? parseInt(state) : null;
+  
+  if (!userId) {
+    console.error('Invalid or missing userId in state:', state);
+    return res.redirect('https://rocking-z-farm.vercel.app?jd_error=invalid_state');
   }
   
   try {
@@ -68,18 +90,6 @@ router.get('/callback', async (req, res) => {
     
     const { access_token, refresh_token, expires_in } = tokenResponse.data;
     
-    // Store tokens in database
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS john_deere_tokens (
-        user_id INTEGER PRIMARY KEY,
-        access_token TEXT NOT NULL,
-        refresh_token TEXT,
-        expires_at TIMESTAMP NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    
     const expiresAt = new Date(Date.now() + expires_in * 1000);
     
     await db.query(`
@@ -92,6 +102,8 @@ router.get('/callback', async (req, res) => {
         expires_at = $4,
         updated_at = CURRENT_TIMESTAMP
     `, [userId, access_token, refresh_token, expiresAt]);
+    
+    console.log('Successfully stored tokens for user:', userId);
     
     // Redirect back to frontend with success
     res.redirect('https://rocking-z-farm.vercel.app?jd_connected=true');
