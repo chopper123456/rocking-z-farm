@@ -8,19 +8,21 @@
     "dev": "nodemon server.js",
     "init-db": "node scripts/initDatabase.js"
   },
-  "keywords": ["farm", "management", "agriculture"],
-  "author": "Rocking Z Farm",
-  "license": "MIT",
+  "keywords": ["farm", "management", "api"],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "axios": "^1.6.0",
     "pg": "^8.11.3",
     "bcrypt": "^5.1.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
-    "express-validator": "^7.0.1"
+    "express-validator": "^7.0.1",
+    "axios": "^1.6.0",
+    "express-rate-limit": "^7.1.5",
+    "compression": "^1.7.4"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
