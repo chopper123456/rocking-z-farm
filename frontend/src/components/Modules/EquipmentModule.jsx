@@ -31,7 +31,6 @@ function EquipmentModule({ user, onLogout }) {
   const [detailTab, setDetailTab] = useState('overview');
 
   const [syncingJD, setSyncingJD] = useState(false);
-  const [syncingOps, setSyncingOps] = useState(false);
   const [syncMessage, setSyncMessage] = useState(null);
 
   const [showAddEquipment, setShowAddEquipment] = useState(false);
@@ -315,25 +314,6 @@ function EquipmentModule({ user, onLogout }) {
     }
   };
 
-  const handleSyncFromOperations = async () => {
-    setSyncingOps(true);
-    setSyncMessage(null);
-    try {
-      const res = await axios.post(`${API_URL}/equipment-jd/sync-from-operations`, {}, { headers: headers() });
-      loadEquipment();
-      const msg = res.data.message || 'Done.';
-      setSyncMessage(msg);
-      alert(msg);
-    } catch (err) {
-      console.error(err);
-      const errMsg = err.response?.data?.error || err.message || 'Failed.';
-      setSyncMessage(errMsg);
-      alert(errMsg);
-    } finally {
-      setSyncingOps(false);
-    }
-  };
-
   const handleSyncHours = async () => {
     try {
       const res = await axios.post(`${API_URL}/equipment-jd/sync-hours/${selectedAsset.id}`, {}, { headers: headers() });
@@ -394,11 +374,8 @@ function EquipmentModule({ user, onLogout }) {
             <div className="section-header">
               <h2>🚜 Equipment</h2>
               <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <button className="action-btn jd-btn" onClick={handleSyncFromJD} disabled={syncingJD} title="Try John Deere machines API, then add equipment from field operations">
+                <button className="action-btn jd-btn" onClick={handleSyncFromJD} disabled={syncingJD} title="Sync equipment from John Deere Operations Center">
                   {syncingJD ? '⏳ Syncing...' : '🚜 Sync from John Deere'}
-                </button>
-                <button className="action-btn" onClick={handleSyncFromOperations} disabled={syncingOps} title="Add equipment names from your synced field operations">
-                  {syncingOps ? '⏳ Adding...' : '📋 Add from field operations'}
                 </button>
                 <button className="add-button" onClick={() => setShowAddEquipment(true)}>
                   + Add Equipment
@@ -411,12 +388,6 @@ function EquipmentModule({ user, onLogout }) {
                 <button type="button" onClick={() => setSyncMessage(null)} style={{ marginTop: '0.5rem', fontSize: '0.9rem', background: 'none', border: 'none', color: '#666', cursor: 'pointer', textDecoration: 'underline' }}>Dismiss</button>
               </div>
             )}
-
-            <div className="equipment-subsection" style={{ marginBottom: '1rem', background: '#f8f9fa', borderLeft: '4px solid #6c757d' }}>
-              <p style={{ margin: 0, color: '#555', fontSize: '0.95rem' }}>
-                <strong>Why can Fields sync but not Equipment?</strong> John Deere uses separate API products. Your app has <strong>Fields</strong> and <strong>Field Operations</strong> access; the <strong>Machines</strong> API is a different product (that’s the 403). You can still get equipment from John Deere: sync <strong>field operations</strong> in the Fields module (per field/year), then click <strong>“Add from field operations”</strong> above to add equipment names from those operations.
-              </p>
-            </div>
 
             {alerts.length > 0 && (
               <div className="equipment-subsection" style={{ marginBottom: '1.5rem' }}>
