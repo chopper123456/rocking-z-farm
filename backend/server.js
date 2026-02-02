@@ -8,6 +8,9 @@ const compression = require('compression');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust proxy - Railway uses proxy
+app.set('trust proxy', 1);
+
 // Rate limiting - prevent brute force attacks
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
