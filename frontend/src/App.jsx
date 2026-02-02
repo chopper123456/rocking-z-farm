@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Login from './components/Auth/Login';
 import Dashboard from './components/Dashboard/Dashboard';
 import AdminPanel from './components/Admin/AdminPanel';
+import JohnDeereIntegration from './components/Settings/JohnDeereIntegration';
 import LivestockModule from './components/Modules/LivestockModule';
 import FieldsModule from './components/Modules/FieldsModule';
 import EquipmentModule from './components/Modules/EquipmentModule';
@@ -79,6 +80,14 @@ function App() {
           element={
             isAuthenticated ? 
             <AdminPanel user={user} onLogout={handleLogout} /> : 
+            <Navigate to="/login" replace />
+          }
+        />
+        <Route
+          path="/john-deere"
+          element={
+            isAuthenticated ? 
+            <JohnDeereIntegration user={user} onLogout={handleLogout} /> : 
             <Navigate to="/login" replace />
           }
         />
