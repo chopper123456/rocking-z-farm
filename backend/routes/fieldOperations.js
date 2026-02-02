@@ -150,6 +150,59 @@ router.post('/sync/:fieldName/:year', async (req, res) => {
       totalOperationsChecked: allOperations.length
     });
     
+    // Auto-update planting and harvest dates in field_years
+    if (operationsAdded > 0) {
+      try {
+        // Find planting operation
+        const plantingOp = await db.query(
+          `SELECT operation_date FROM field_operations 
+           WHERE user_id = $1 AND field_name = $2 AND year = $3 
+           AND operation_type ILIKE '%plant%'
+           ORDER BY operation_date ASC LIMIT 1`,
+          [userId, fieldName, year]
+        );
+        
+        // Find harvest operation
+        const harvestOp = await db.query(
+          `SELECT operation_date FROM field_operations 
+           WHERE user_id = $1 AND field_name = $2 AND year = $3 
+           AND operation_type ILIKE '%harvest%'
+           ORDER BY operation_date DESC LIMIT 1`,
+          [userId, fieldName, year]
+        );
+        
+        // Update field_years with dates
+        let updateFields = [];
+        let updateValues = [userId, fieldName, year];
+        let paramIndex = 4;
+        
+        if (plantingOp.rows.length > 0) {
+          updateFields.push(`planting_date = $${paramIndex}`);
+          updateValues.push(plantingOp.rows[0].operation_date);
+          paramIndex++;
+        }
+        
+        if (harvestOp.rows.length > 0) {
+          updateFields.push(`harvest_date = $${paramIndex}`);
+          updateValues.push(harvestOp.rows[0].operation_date);
+          paramIndex++;
+        }
+        
+        if (updateFields.length > 0) {
+          await db.query(
+            `UPDATE field_years 
+             SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP
+             WHERE user_id = $1 AND field_name = $2 AND year = $3`,
+            updateValues
+          );
+          console.log(`Auto-updated planting/harvest dates for ${fieldName} ${year}`);
+        }
+      } catch (dateError) {
+        console.error('Error auto-updating dates:', dateError);
+        // Don't fail the whole sync if date update fails
+      }
+    }
+    
   } catch (error) {
     console.error('Sync operations error:', error.response?.data || error.message);
     res.status(500).json({ 

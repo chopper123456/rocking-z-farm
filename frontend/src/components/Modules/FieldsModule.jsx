@@ -11,19 +11,18 @@ function FieldsModule({ user, onLogout }) {
   const [selectedYear, setSelectedYear] = useState(null);
   const [yearDetails, setYearDetails] = useState(null);
   const [years, setYears] = useState([]);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [view, setView] = useState('list'); // list, field-detail, year-detail
+  const [view, setView] = useState('list');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [showAddField, setShowAddField] = useState(false);
-  const [showAddYear, setShowAddYear] = useState(false);
+  const [timelineItems, setTimelineItems] = useState([]);
+  const [stats, setStats] = useState({ operations: 0, soilReports: 0, tissueReports: 0, scoutingReports: 0, yieldMap: false });
 
-  // Tab-specific data
-  const [scoutingReports, setScoutingReports] = useState([]);
-  const [soilReports, setSoilReports] = useState([]);
-  const [tissueReports, setTissueReports] = useState([]);
-  const [yieldMap, setYieldMap] = useState(null);
-  const [operations, setOperations] = useState([]);
+  const [showAddField, setShowAddField] = useState(false);
+  const [showUploadSoil, setShowUploadSoil] = useState(false);
+  const [showUploadTissue, setShowUploadTissue] = useState(false);
+  const [showAddScouting, setShowAddScouting] = useState(false);
+  const [showUploadYield, setShowUploadYield] = useState(false);
+  const [showEditYear, setShowEditYear] = useState(false);
 
   const [newField, setNewField] = useState({
     fieldName: '',
@@ -33,11 +32,41 @@ function FieldsModule({ user, onLogout }) {
     notes: ''
   });
 
-  const [newYear, setNewYear] = useState({
-    year: new Date().getFullYear(),
+  const [soilUpload, setSoilUpload] = useState({
+    reportDate: new Date().toISOString().split('T')[0],
+    notes: '',
+    file: null
+  });
+
+  const [tissueUpload, setTissueUpload] = useState({
+    reportDate: new Date().toISOString().split('T')[0],
+    notes: '',
+    file: null
+  });
+
+  const [scoutingNote, setScoutingNote] = useState({
+    reportDate: new Date().toISOString().split('T')[0],
+    growthStage: '',
+    pestPressure: 'Low',
+    weedPressure: 'Low',
+    diseaseNotes: '',
+    generalNotes: '',
+    weatherConditions: '',
+    photo: null
+  });
+
+  const [yieldUpload, setYieldUpload] = useState({
+    harvestDate: '',
+    averageYield: '',
+    totalBushels: '',
+    moistureAvg: '',
+    notes: '',
+    mapFile: null
+  });
+
+  const [editYearData, setEditYearData] = useState({
     crop: '',
     variety: '',
-    plantingDate: '',
     expectedYield: '',
     notes: ''
   });
@@ -50,9 +79,9 @@ function FieldsModule({ user, onLogout }) {
 
   useEffect(() => {
     if (selectedField && selectedYear && yearDetails) {
-      loadTabData(activeTab);
+      loadTimelineAndStats();
     }
-  }, [activeTab, selectedField, selectedYear, yearDetails]);
+  }, [selectedField, selectedYear, yearDetails]);
 
   const loadFields = async () => {
     try {
@@ -90,64 +119,115 @@ function FieldsModule({ user, onLogout }) {
         headers: { Authorization: `Bearer ${token}` }
       });
       setYearDetails(response.data);
+      setEditYearData({
+        crop: response.data.crop || '',
+        variety: response.data.variety || '',
+        expectedYield: response.data.expected_yield || '',
+        notes: response.data.notes || ''
+      });
     } catch (error) {
       console.error('Error loading year details:', error);
     }
   };
 
-  const loadTabData = async (tab) => {
+  const loadTimelineAndStats = async () => {
     const token = localStorage.getItem('token');
-    
+    let timeline = [];
+    let newStats = { operations: 0, soilReports: 0, tissueReports: 0, scoutingReports: 0, yieldMap: false };
+
     try {
-      switch(tab) {
-        case 'scouting':
-          const scoutingRes = await axios.get(
-            `${API_URL}/scouting-reports/${selectedField.field_name}/${selectedYear}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          setScoutingReports(scoutingRes.data);
-          break;
-          
-        case 'soil':
-          const soilRes = await axios.get(
-            `${API_URL}/field-reports/${selectedField.field_name}/${selectedYear}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          setSoilReports(soilRes.data.filter(r => r.report_type === 'soil'));
-          break;
-          
-        case 'tissue':
-          const tissueRes = await axios.get(
-            `${API_URL}/field-reports/${selectedField.field_name}/${selectedYear}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          setTissueReports(tissueRes.data.filter(r => r.report_type === 'tissue'));
-          break;
-          
-        case 'yield':
-          try {
-            const yieldRes = await axios.get(
-              `${API_URL}/yield-maps/${selectedField.field_name}/${selectedYear}`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            setYieldMap(yieldRes.data);
-          } catch (error) {
-            if (error.response?.status === 404) {
-              setYieldMap(null);
-            }
-          }
-          break;
-          
-        case 'operations':
-          const opsRes = await axios.get(
-            `${API_URL}/field-operations/${selectedField.field_name}/${selectedYear}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          setOperations(opsRes.data);
-          break;
+      // Load operations
+      const opsRes = await axios.get(
+        `${API_URL}/field-operations/${selectedField.field_name}/${selectedYear}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      newStats.operations = opsRes.data.length;
+      opsRes.data.forEach(op => {
+        timeline.push({
+          date: new Date(op.operation_date),
+          type: 'operation',
+          icon: '🚜',
+          title: op.operation_type,
+          details: `${op.equipment_used || 'Equipment not specified'}${op.product_applied ? ` • ${op.product_applied}` : ''}${op.rate ? ` • ${op.rate} ${op.rate_unit}` : ''}`,
+          data: op
+        });
+      });
+
+      // Load scouting reports
+      const scoutingRes = await axios.get(
+        `${API_URL}/scouting-reports/${selectedField.field_name}/${selectedYear}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      newStats.scoutingReports = scoutingRes.data.length;
+      scoutingRes.data.forEach(report => {
+        timeline.push({
+          date: new Date(report.report_date),
+          type: 'scouting',
+          icon: '📝',
+          title: 'Scouting Report',
+          details: `${report.growth_stage || 'Growth stage not specified'} • Pest: ${report.pest_pressure || 'N/A'} • Weed: ${report.weed_pressure || 'N/A'}`,
+          data: report
+        });
+      });
+
+      // Load soil/tissue reports
+      const reportsRes = await axios.get(
+        `${API_URL}/field-reports/${selectedField.field_name}/${selectedYear}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      reportsRes.data.forEach(report => {
+        if (report.report_type === 'soil') {
+          newStats.soilReports++;
+          timeline.push({
+            date: new Date(report.report_date),
+            type: 'soil',
+            icon: '🧪',
+            title: 'Soil Sample',
+            details: report.notes || 'No notes',
+            data: report
+          });
+        } else if (report.report_type === 'tissue') {
+          newStats.tissueReports++;
+          timeline.push({
+            date: new Date(report.report_date),
+            type: 'tissue',
+            icon: '🌿',
+            title: 'Tissue Sample',
+            details: report.notes || 'No notes',
+            data: report
+          });
+        }
+      });
+
+      // Load yield map
+      try {
+        const yieldRes = await axios.get(
+          `${API_URL}/yield-maps/${selectedField.field_name}/${selectedYear}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (yieldRes.data) {
+          newStats.yieldMap = true;
+          timeline.push({
+            date: new Date(yieldRes.data.harvest_date || yieldRes.data.created_at),
+            type: 'yield',
+            icon: '📊',
+            title: 'Yield Map',
+            details: `${yieldRes.data.average_yield || 'N/A'} bu/ac avg • ${yieldRes.data.total_bushels || 'N/A'} total bu`,
+            data: yieldRes.data
+          });
+        }
+      } catch (error) {
+        // Yield map doesn't exist, that's okay
       }
+
+      // Sort timeline by date (newest first)
+      timeline.sort((a, b) => b.date - a.date);
+      
+      setTimelineItems(timeline);
+      setStats(newStats);
     } catch (error) {
-      console.error(`Error loading ${tab} data:`, error);
+      console.error('Error loading timeline:', error);
     }
   };
 
@@ -168,23 +248,53 @@ function FieldsModule({ user, onLogout }) {
     }
   };
 
-  const handleAddYear = async (e) => {
-    e.preventDefault();
+  const handleQuickAddYear = async (year) => {
     try {
       const token = localStorage.getItem('token');
       await axios.post(`${API_URL}/field-years`, {
-        ...newYear,
-        fieldName: selectedField.field_name
+        fieldName: selectedField.field_name,
+        year: year,
+        crop: '',
+        variety: '',
+        notes: ''
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setShowAddYear(false);
-      setNewYear({ year: new Date().getFullYear(), crop: '', variety: '', plantingDate: '', expectedYield: '', notes: '' });
+      
       await loadYears(selectedField.field_name);
-      alert('Year added successfully!');
+      
+      // Automatically open the year
+      setSelectedYear(year);
+      await loadYearDetails(selectedField.field_name, year);
+      setView('year-detail');
     } catch (error) {
       console.error('Error adding year:', error);
-      alert(error.response?.data?.error || 'Failed to add year');
+      if (error.response?.data?.error?.includes('already exists')) {
+        // Year exists, just open it
+        setSelectedYear(year);
+        await loadYearDetails(selectedField.field_name, year);
+        setView('year-detail');
+      } else {
+        alert('Failed to add year');
+      }
+    }
+  };
+
+  const handleUpdateYear = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(
+        `${API_URL}/field-years/${selectedField.field_name}/${selectedYear}`,
+        editYearData,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setShowEditYear(false);
+      await loadYearDetails(selectedField.field_name, selectedYear);
+      alert('Year updated successfully!');
+    } catch (error) {
+      console.error('Error updating year:', error);
+      alert('Failed to update year');
     }
   };
 
@@ -197,7 +307,6 @@ function FieldsModule({ user, onLogout }) {
   const handleYearClick = async (year) => {
     setSelectedYear(year.year);
     await loadYearDetails(selectedField.field_name, year.year);
-    setActiveTab('overview');
     setView('year-detail');
   };
 
@@ -216,8 +325,8 @@ function FieldsModule({ user, onLogout }) {
     }
   };
 
-  const handleSyncOperations = async () => {
-    if (!window.confirm(`Sync field operations from John Deere for ${selectedField.field_name} (${selectedYear})?`)) return;
+  const handleSyncFromJohnDeere = async () => {
+    if (!window.confirm(`Sync operations from John Deere for ${selectedField.field_name} (${selectedYear})?\n\nThis will pull planting, spraying, tillage, and harvest operations.`)) return;
     
     try {
       const token = localStorage.getItem('token');
@@ -226,11 +335,173 @@ function FieldsModule({ user, onLogout }) {
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      
       alert(`✅ ${response.data.message}`);
-      loadTabData('operations');
+      
+      // Reload year details (may have updated planting/harvest dates)
+      await loadYearDetails(selectedField.field_name, selectedYear);
+      await loadTimelineAndStats();
     } catch (error) {
-      console.error('Error syncing operations:', error);
-      alert('Failed to sync operations. Make sure John Deere is connected.');
+      console.error('Error syncing:', error);
+      alert('Failed to sync. Make sure John Deere is connected.');
+    }
+  };
+
+  const handleUploadSoilReport = async (e) => {
+    e.preventDefault();
+    if (!soilUpload.file) {
+      alert('Please select a PDF file');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('file', soilUpload.file);
+      formData.append('fieldName', selectedField.field_name);
+      formData.append('year', selectedYear);
+      formData.append('reportType', 'soil');
+      formData.append('reportDate', soilUpload.reportDate);
+      formData.append('notes', soilUpload.notes);
+
+      await axios.post(`${API_URL}/field-reports`, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      setShowUploadSoil(false);
+      setSoilUpload({ reportDate: new Date().toISOString().split('T')[0], notes: '', file: null });
+      await loadTimelineAndStats();
+      alert('Soil report uploaded successfully!');
+    } catch (error) {
+      console.error('Error uploading soil report:', error);
+      alert('Failed to upload soil report');
+    }
+  };
+
+  const handleUploadTissueReport = async (e) => {
+    e.preventDefault();
+    if (!tissueUpload.file) {
+      alert('Please select a PDF file');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('file', tissueUpload.file);
+      formData.append('fieldName', selectedField.field_name);
+      formData.append('year', selectedYear);
+      formData.append('reportType', 'tissue');
+      formData.append('reportDate', tissueUpload.reportDate);
+      formData.append('notes', tissueUpload.notes);
+
+      await axios.post(`${API_URL}/field-reports`, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      setShowUploadTissue(false);
+      setTissueUpload({ reportDate: new Date().toISOString().split('T')[0], notes: '', file: null });
+      await loadTimelineAndStats();
+      alert('Tissue report uploaded successfully!');
+    } catch (error) {
+      console.error('Error uploading tissue report:', error);
+      alert('Failed to upload tissue report');
+    }
+  };
+
+  const handleAddScoutingNote = async (e) => {
+    e.preventDefault();
+
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      if (scoutingNote.photo) {
+        formData.append('photo', scoutingNote.photo);
+      }
+      formData.append('fieldName', selectedField.field_name);
+      formData.append('year', selectedYear);
+      formData.append('reportDate', scoutingNote.reportDate);
+      formData.append('growthStage', scoutingNote.growthStage);
+      formData.append('pestPressure', scoutingNote.pestPressure);
+      formData.append('weedPressure', scoutingNote.weedPressure);
+      formData.append('diseaseNotes', scoutingNote.diseaseNotes);
+      formData.append('generalNotes', scoutingNote.generalNotes);
+      formData.append('weatherConditions', scoutingNote.weatherConditions);
+
+      await axios.post(`${API_URL}/scouting-reports`, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      setShowAddScouting(false);
+      setScoutingNote({
+        reportDate: new Date().toISOString().split('T')[0],
+        growthStage: '',
+        pestPressure: 'Low',
+        weedPressure: 'Low',
+        diseaseNotes: '',
+        generalNotes: '',
+        weatherConditions: '',
+        photo: null
+      });
+      await loadTimelineAndStats();
+      alert('Scouting report added successfully!');
+    } catch (error) {
+      console.error('Error adding scouting report:', error);
+      alert('Failed to add scouting report');
+    }
+  };
+
+  const handleUploadYieldMap = async (e) => {
+    e.preventDefault();
+
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      if (yieldUpload.mapFile) {
+        formData.append('mapFile', yieldUpload.mapFile);
+      }
+      formData.append('fieldName', selectedField.field_name);
+      formData.append('year', selectedYear);
+      formData.append('harvestDate', yieldUpload.harvestDate);
+      formData.append('averageYield', yieldUpload.averageYield);
+      formData.append('totalBushels', yieldUpload.totalBushels);
+      formData.append('moistureAvg', yieldUpload.moistureAvg);
+      formData.append('notes', yieldUpload.notes);
+
+      await axios.post(`${API_URL}/yield-maps`, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      setShowUploadYield(false);
+      setYieldUpload({ harvestDate: '', averageYield: '', totalBushels: '', moistureAvg: '', notes: '', mapFile: null });
+      await loadTimelineAndStats();
+      
+      // Update year details with actual yield
+      if (yieldUpload.averageYield) {
+        await axios.put(
+          `${API_URL}/field-years/${selectedField.field_name}/${selectedYear}`,
+          { ...editYearData, actualYield: yieldUpload.averageYield },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        await loadYearDetails(selectedField.field_name, selectedYear);
+      }
+      
+      alert('Yield map uploaded successfully!');
+    } catch (error) {
+      console.error('Error uploading yield map:', error);
+      alert('Failed to upload yield map');
     }
   };
 
@@ -238,14 +509,9 @@ function FieldsModule({ user, onLogout }) {
     f.field_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const tabs = [
-    { id: 'overview', label: '📋 Overview', icon: '📋' },
-    { id: 'scouting', label: '🔍 Scouting', icon: '🔍' },
-    { id: 'soil', label: '🧪 Soil Samples', icon: '🧪' },
-    { id: 'tissue', label: '🌿 Tissue Samples', icon: '🌿' },
-    { id: 'yield', label: '📊 Yield Map', icon: '📊' },
-    { id: 'operations', label: '🚜 Operations', icon: '🚜' }
-  ];
+  const currentYear = new Date().getFullYear();
+  const nextYear = currentYear + 1;
+  const prevYear = currentYear - 1;
 
   return (
     <div className="app-container">
@@ -320,138 +586,136 @@ function FieldsModule({ user, onLogout }) {
               </p>
             </div>
 
-            <div className="section-header">
-              <h2>Select Season</h2>
-              <button className="add-button" onClick={() => setShowAddYear(true)}>
-                + Add Year
+            <div className="quick-year-buttons">
+              <button className="year-quick-btn" onClick={() => handleQuickAddYear(prevYear)}>
+                {prevYear} Season
+              </button>
+              <button className="year-quick-btn primary" onClick={() => handleQuickAddYear(currentYear)}>
+                {currentYear} Season
+              </button>
+              <button className="year-quick-btn" onClick={() => handleQuickAddYear(nextYear)}>
+                {nextYear} Season
               </button>
             </div>
 
-            {years.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-state-icon">📅</div>
-                <p>No years yet. Click "Add Year" to start tracking this field.</p>
-              </div>
-            ) : (
-              <div className="year-list">
-                {years.map((year) => (
-                  <div 
-                    key={year.id} 
-                    className="year-card"
-                    onClick={() => handleYearClick(year)}
-                  >
-                    <h3>{year.year} Season</h3>
-                    <p>{year.crop || 'No crop specified'} {year.variety && `- ${year.variety}`}</p>
-                    {year.planting_date && (
-                      <span className="date-badge">Planted: {new Date(year.planting_date).toLocaleDateString()}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
+            {years.length > 0 && (
+              <>
+                <div className="divider">
+                  <span>Or select previous season</span>
+                </div>
+                <div className="year-list">
+                  {years.map((year) => (
+                    <div 
+                      key={year.id} 
+                      className="year-card"
+                      onClick={() => handleYearClick(year)}
+                    >
+                      <h3>{year.year} Season</h3>
+                      <p>{year.crop || 'No crop specified'} {year.variety && `- ${year.variety}`}</p>
+                      {year.planting_date && (
+                        <span className="date-badge">Planted: {new Date(year.planting_date).toLocaleDateString()}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </>
         )}
 
-        {/* YEAR DETAIL VIEW - Tabs */}
+        {/* YEAR DETAIL VIEW - Timeline */}
         {view === 'year-detail' && selectedField && selectedYear && yearDetails && (
           <>
             <button className="back-button" onClick={() => setView('field-detail')}>
               ← Back to Field
             </button>
             
-            <div className="field-detail-header">
-              <h3>{selectedField.field_name} - {selectedYear} Season</h3>
-              <p>{yearDetails.crop || 'No crop'} {yearDetails.variety && `• ${yearDetails.variety}`}</p>
-            </div>
-
-            <div className="tabs">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  className={`tab ${activeTab === tab.id ? 'active' : ''}`}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  {tab.icon} {tab.label}
+            <div className="year-overview-card">
+              <div className="year-header">
+                <div>
+                  <h2>{selectedField.field_name} - {selectedYear} Season</h2>
+                  <p className="crop-info">
+                    {yearDetails.crop || 'No crop set'} 
+                    {yearDetails.variety && ` • ${yearDetails.variety}`}
+                  </p>
+                </div>
+                <button className="edit-btn" onClick={() => setShowEditYear(true)}>
+                  ✏️ Edit
                 </button>
-              ))}
+              </div>
+
+              <div className="year-stats-grid">
+                <div className="stat-item">
+                  <span className="stat-label">Planting Date</span>
+                  <span className="stat-value">
+                    {yearDetails.planting_date ? new Date(yearDetails.planting_date).toLocaleDateString() : 'Not set'}
+                  </span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Harvest Date</span>
+                  <span className="stat-value">
+                    {yearDetails.harvest_date ? new Date(yearDetails.harvest_date).toLocaleDateString() : 'Not set'}
+                  </span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Expected Yield</span>
+                  <span className="stat-value">{yearDetails.expected_yield || 'Not set'}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Actual Yield</span>
+                  <span className="stat-value">{yearDetails.actual_yield || 'Not harvested'}</span>
+                </div>
+              </div>
+
+              <div className="quick-stats">
+                <div className="quick-stat">🚜 {stats.operations} Operations</div>
+                <div className="quick-stat">📝 {stats.scoutingReports} Scout Reports</div>
+                <div className="quick-stat">🧪 {stats.soilReports} Soil Samples</div>
+                <div className="quick-stat">🌿 {stats.tissueReports} Tissue Samples</div>
+                {stats.yieldMap && <div className="quick-stat">📊 Yield Map</div>}
+              </div>
             </div>
 
-            <div className="tab-content">
-              {activeTab === 'overview' && (
-                <div className="overview-content">
-                  <h3>Year Details</h3>
-                  <div className="detail-grid">
-                    <div className="detail-item">
-                      <label>Crop:</label>
-                      <span>{yearDetails.crop || 'Not specified'}</span>
-                    </div>
-                    <div className="detail-item">
-                      <label>Variety:</label>
-                      <span>{yearDetails.variety || 'Not specified'}</span>
-                    </div>
-                    <div className="detail-item">
-                      <label>Planting Date:</label>
-                      <span>{yearDetails.planting_date ? new Date(yearDetails.planting_date).toLocaleDateString() : 'Not set'}</span>
-                    </div>
-                    <div className="detail-item">
-                      <label>Expected Yield:</label>
-                      <span>{yearDetails.expected_yield || 'Not set'}</span>
-                    </div>
-                    {yearDetails.actual_yield && (
-                      <div className="detail-item">
-                        <label>Actual Yield:</label>
-                        <span>{yearDetails.actual_yield}</span>
-                      </div>
-                    )}
-                  </div>
-                  {yearDetails.notes && (
-                    <div className="notes-section">
-                      <h4>Notes:</h4>
-                      <p>{yearDetails.notes}</p>
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="action-buttons-grid">
+              <button className="action-btn jd-btn" onClick={handleSyncFromJohnDeere}>
+                🚜 Sync from John Deere
+              </button>
+              <button className="action-btn" onClick={() => setShowUploadSoil(true)}>
+                🧪 Upload Soil Report
+              </button>
+              <button className="action-btn" onClick={() => setShowUploadTissue(true)}>
+                🌿 Upload Tissue Report
+              </button>
+              <button className="action-btn" onClick={() => setShowAddScouting(true)}>
+                📝 Add Scouting Note
+              </button>
+              <button className="action-btn" onClick={() => setShowUploadYield(true)}>
+                📊 Upload Yield Map
+              </button>
+            </div>
 
-              {activeTab === 'operations' && (
-                <div className="operations-content">
-                  <div className="section-header">
-                    <h3>Field Operations</h3>
-                    <button className="add-button" onClick={handleSyncOperations}>
-                      🔄 Sync from John Deere
-                    </button>
-                  </div>
-                  
-                  {operations.length === 0 ? (
-                    <div className="empty-state">
-                      <p>No operations recorded. Click "Sync from John Deere" to import operations.</p>
-                    </div>
-                  ) : (
-                    <div className="operations-timeline">
-                      {operations.map(op => (
-                        <div key={op.id} className="operation-card">
-                          <div className="operation-header">
-                            <h4>{op.operation_type}</h4>
-                            <span className="operation-date">{new Date(op.operation_date).toLocaleDateString()}</span>
-                          </div>
-                          <div className="operation-details">
-                            {op.equipment_used && <p><strong>Equipment:</strong> {op.equipment_used}</p>}
-                            {op.operator && <p><strong>Operator:</strong> {op.operator}</p>}
-                            {op.product_applied && <p><strong>Product:</strong> {op.product_applied}</p>}
-                            {op.rate && <p><strong>Rate:</strong> {op.rate} {op.rate_unit}</p>}
-                            {op.area_covered && <p><strong>Area:</strong> {op.area_covered} acres</p>}
-                          </div>
+            <div className="timeline-section">
+              <h3>Timeline</h3>
+              {timelineItems.length === 0 ? (
+                <div className="empty-timeline">
+                  <p>No activity yet. Click "Sync from John Deere" or add reports above.</p>
+                </div>
+              ) : (
+                <div className="timeline">
+                  {timelineItems.map((item, index) => (
+                    <div key={index} className={`timeline-item ${item.type}`}>
+                      <div className="timeline-icon">{item.icon}</div>
+                      <div className="timeline-content">
+                        <div className="timeline-header">
+                          <h4>{item.title}</h4>
+                          <span className="timeline-date">
+                            {item.date.toLocaleDateString()}
+                          </span>
                         </div>
-                      ))}
+                        <p className="timeline-details">{item.details}</p>
+                      </div>
                     </div>
-                  )}
-                </div>
-              )}
-
-              {/* Other tabs will be implemented in next iteration */}
-              {activeTab !== 'overview' && activeTab !== 'operations' && (
-                <div className="coming-soon">
-                  <p>This tab is being built. Check back soon!</p>
+                  ))}
                 </div>
               )}
             </div>
@@ -514,32 +778,21 @@ function FieldsModule({ user, onLogout }) {
           </div>
         )}
 
-        {/* ADD YEAR MODAL */}
-        {showAddYear && (
+        {/* EDIT YEAR MODAL */}
+        {showEditYear && (
           <div className="modal active">
             <div className="modal-content">
               <div className="modal-header">
-                <h3>Add Year</h3>
-                <button className="close-btn" onClick={() => setShowAddYear(false)}>×</button>
+                <h3>Edit {selectedYear} Season</h3>
+                <button className="close-btn" onClick={() => setShowEditYear(false)}>×</button>
               </div>
-              <form onSubmit={handleAddYear}>
-                <div className="form-group">
-                  <label>Year *</label>
-                  <input
-                    type="number"
-                    required
-                    min="2000"
-                    max="2100"
-                    value={newYear.year}
-                    onChange={(e) => setNewYear({...newYear, year: e.target.value})}
-                  />
-                </div>
+              <form onSubmit={handleUpdateYear}>
                 <div className="form-group">
                   <label>Crop</label>
                   <input
                     type="text"
-                    value={newYear.crop}
-                    onChange={(e) => setNewYear({...newYear, crop: e.target.value})}
+                    value={editYearData.crop}
+                    onChange={(e) => setEditYearData({...editYearData, crop: e.target.value})}
                     placeholder="e.g., Corn, Soybeans"
                   />
                 </div>
@@ -547,36 +800,262 @@ function FieldsModule({ user, onLogout }) {
                   <label>Variety</label>
                   <input
                     type="text"
-                    value={newYear.variety}
-                    onChange={(e) => setNewYear({...newYear, variety: e.target.value})}
+                    value={editYearData.variety}
+                    onChange={(e) => setEditYearData({...editYearData, variety: e.target.value})}
                   />
                 </div>
                 <div className="form-group">
-                  <label>Planting Date</label>
-                  <input
-                    type="date"
-                    value={newYear.plantingDate}
-                    onChange={(e) => setNewYear({...newYear, plantingDate: e.target.value})}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Expected Yield</label>
+                  <label>Expected Yield (bu/ac)</label>
                   <input
                     type="number"
                     step="0.1"
-                    value={newYear.expectedYield}
-                    onChange={(e) => setNewYear({...newYear, expectedYield: e.target.value})}
-                    placeholder="Bushels per acre"
+                    value={editYearData.expectedYield}
+                    onChange={(e) => setEditYearData({...editYearData, expectedYield: e.target.value})}
                   />
                 </div>
                 <div className="form-group">
                   <label>Notes</label>
                   <textarea
-                    value={newYear.notes}
-                    onChange={(e) => setNewYear({...newYear, notes: e.target.value})}
+                    value={editYearData.notes}
+                    onChange={(e) => setEditYearData({...editYearData, notes: e.target.value})}
                   />
                 </div>
-                <button type="submit" className="btn-primary">Add Year</button>
+                <button type="submit" className="btn-primary">Save Changes</button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* UPLOAD SOIL REPORT MODAL */}
+        {showUploadSoil && (
+          <div className="modal active">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h3>Upload Soil Report</h3>
+                <button className="close-btn" onClick={() => setShowUploadSoil(false)}>×</button>
+              </div>
+              <form onSubmit={handleUploadSoilReport}>
+                <div className="form-group">
+                  <label>Report Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={soilUpload.reportDate}
+                    onChange={(e) => setSoilUpload({...soilUpload, reportDate: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>PDF File *</label>
+                  <input
+                    type="file"
+                    required
+                    accept=".pdf"
+                    onChange={(e) => setSoilUpload({...soilUpload, file: e.target.files[0]})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Notes</label>
+                  <textarea
+                    value={soilUpload.notes}
+                    onChange={(e) => setSoilUpload({...soilUpload, notes: e.target.value})}
+                    placeholder="Any notes about this soil sample..."
+                  />
+                </div>
+                <button type="submit" className="btn-primary">Upload Report</button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* UPLOAD TISSUE REPORT MODAL */}
+        {showUploadTissue && (
+          <div className="modal active">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h3>Upload Tissue Report</h3>
+                <button className="close-btn" onClick={() => setShowUploadTissue(false)}>×</button>
+              </div>
+              <form onSubmit={handleUploadTissueReport}>
+                <div className="form-group">
+                  <label>Report Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={tissueUpload.reportDate}
+                    onChange={(e) => setTissueUpload({...tissueUpload, reportDate: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>PDF File *</label>
+                  <input
+                    type="file"
+                    required
+                    accept=".pdf"
+                    onChange={(e) => setTissueUpload({...tissueUpload, file: e.target.files[0]})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Notes</label>
+                  <textarea
+                    value={tissueUpload.notes}
+                    onChange={(e) => setTissueUpload({...tissueUpload, notes: e.target.value})}
+                    placeholder="Any notes about this tissue sample..."
+                  />
+                </div>
+                <button type="submit" className="btn-primary">Upload Report</button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ADD SCOUTING NOTE MODAL */}
+        {showAddScouting && (
+          <div className="modal active">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h3>Add Scouting Report</h3>
+                <button className="close-btn" onClick={() => setShowAddScouting(false)}>×</button>
+              </div>
+              <form onSubmit={handleAddScoutingNote}>
+                <div className="form-group">
+                  <label>Scout Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={scoutingNote.reportDate}
+                    onChange={(e) => setScoutingNote({...scoutingNote, reportDate: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Growth Stage</label>
+                  <input
+                    type="text"
+                    value={scoutingNote.growthStage}
+                    onChange={(e) => setScoutingNote({...scoutingNote, growthStage: e.target.value})}
+                    placeholder="e.g., V6, R3, etc."
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Pest Pressure</label>
+                  <select
+                    value={scoutingNote.pestPressure}
+                    onChange={(e) => setScoutingNote({...scoutingNote, pestPressure: e.target.value})}
+                  >
+                    <option>Low</option>
+                    <option>Medium</option>
+                    <option>High</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Weed Pressure</label>
+                  <select
+                    value={scoutingNote.weedPressure}
+                    onChange={(e) => setScoutingNote({...scoutingNote, weedPressure: e.target.value})}
+                  >
+                    <option>Low</option>
+                    <option>Medium</option>
+                    <option>High</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Disease Notes</label>
+                  <textarea
+                    value={scoutingNote.diseaseNotes}
+                    onChange={(e) => setScoutingNote({...scoutingNote, diseaseNotes: e.target.value})}
+                    placeholder="Any disease observations..."
+                  />
+                </div>
+                <div className="form-group">
+                  <label>General Notes</label>
+                  <textarea
+                    value={scoutingNote.generalNotes}
+                    onChange={(e) => setScoutingNote({...scoutingNote, generalNotes: e.target.value})}
+                    placeholder="Overall observations..."
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Weather</label>
+                  <input
+                    type="text"
+                    value={scoutingNote.weatherConditions}
+                    onChange={(e) => setScoutingNote({...scoutingNote, weatherConditions: e.target.value})}
+                    placeholder="e.g., Sunny, 75°F"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Photo (optional)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setScoutingNote({...scoutingNote, photo: e.target.files[0]})}
+                  />
+                </div>
+                <button type="submit" className="btn-primary">Add Report</button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* UPLOAD YIELD MAP MODAL */}
+        {showUploadYield && (
+          <div className="modal active">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h3>Upload Yield Map</h3>
+                <button className="close-btn" onClick={() => setShowUploadYield(false)}>×</button>
+              </div>
+              <form onSubmit={handleUploadYieldMap}>
+                <div className="form-group">
+                  <label>Harvest Date</label>
+                  <input
+                    type="date"
+                    value={yieldUpload.harvestDate}
+                    onChange={(e) => setYieldUpload({...yieldUpload, harvestDate: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Average Yield (bu/ac)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={yieldUpload.averageYield}
+                    onChange={(e) => setYieldUpload({...yieldUpload, averageYield: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Total Bushels</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={yieldUpload.totalBushels}
+                    onChange={(e) => setYieldUpload({...yieldUpload, totalBushels: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Moisture %</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={yieldUpload.moistureAvg}
+                    onChange={(e) => setYieldUpload({...yieldUpload, moistureAvg: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Yield Map File (optional)</label>
+                  <input
+                    type="file"
+                    onChange={(e) => setYieldUpload({...yieldUpload, mapFile: e.target.files[0]})}
+                  />
+                  <small>Accepts: .shp, .csv, .pdf, images</small>
+                </div>
+                <div className="form-group">
+                  <label>Notes</label>
+                  <textarea
+                    value={yieldUpload.notes}
+                    onChange={(e) => setYieldUpload({...yieldUpload, notes: e.target.value})}
+                  />
+                </div>
+                <button type="submit" className="btn-primary">Upload Yield Map</button>
               </form>
             </div>
           </div>
