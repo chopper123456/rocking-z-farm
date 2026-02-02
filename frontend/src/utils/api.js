@@ -65,11 +65,35 @@ export const fieldReportsAPI = {
   delete: (id) => api.delete(`/field-reports/${id}`),
 };
 
-// Equipment API
+// Equipment API (assets + maintenance, parts, fuel, operators)
 export const equipmentAPI = {
   getAll: () => api.get('/equipment'),
+  getOne: (id) => api.get(`/equipment/${id}`),
   create: (data) => api.post('/equipment', data),
+  update: (id, data) => api.put(`/equipment/${id}`, data),
   delete: (id) => api.delete(`/equipment/${id}`),
+  getMaintenance: (assetId) => api.get(`/equipment/${assetId}/maintenance`),
+  addMaintenance: (assetId, formData) => api.post(`/equipment/${assetId}/maintenance`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getSchedule: (assetId) => api.get(`/equipment/${assetId}/schedule`),
+  addSchedule: (assetId, data) => api.post(`/equipment/${assetId}/schedule`, data),
+  getParts: (assetId) => api.get(`/equipment/${assetId}/parts`),
+  addPart: (assetId, data) => api.post(`/equipment/${assetId}/parts`, data),
+  getFuel: (assetId) => api.get(`/equipment/${assetId}/fuel`),
+  addFuel: (assetId, data) => api.post(`/equipment/${assetId}/fuel`, data),
+  getOperators: (assetId) => api.get(`/equipment/${assetId}/operators`),
+  addOperator: (assetId, data) => api.post(`/equipment/${assetId}/operators`, data),
+};
+
+// Equipment John Deere sync & reports
+export const equipmentJDAPI = {
+  sync: () => api.post('/equipment-jd/sync'),
+  syncHours: (assetId) => api.post(`/equipment-jd/sync-hours/${assetId}`),
+  fieldUsage: () => api.get('/equipment-jd/field-usage'),
+  alerts: () => api.get('/equipment-jd/alerts'),
+  maintenanceCosts: (year) => api.get(`/equipment-jd/reports/maintenance-costs?year=${year}`),
+  fuelReport: (year) => api.get(`/equipment-jd/reports/fuel?year=${year}`),
+  utilization: (params) => api.get('/equipment-jd/reports/utilization', { params }),
+  depreciation: () => api.get('/equipment-jd/reports/depreciation'),
 };
 
 // Grain API

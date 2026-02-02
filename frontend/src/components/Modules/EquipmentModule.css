@@ -1,0 +1,564 @@
+/* Equipment Module - matches Fields module earth tones */
+.equipment-module .module-content {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.equipment-module .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.equipment-module .section-header h2 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2rem;
+  color: var(--earth-dark);
+  letter-spacing: 1px;
+  margin: 0;
+}
+
+.equipment-module .add-button,
+.equipment-module .back-button,
+.equipment-module .edit-btn,
+.equipment-module .action-btn,
+.equipment-module .delete-equipment-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 12px;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.1rem;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.equipment-module .add-button {
+  background: linear-gradient(135deg, var(--earth-mid), var(--earth-dark));
+  color: var(--white);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+.equipment-module .add-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.2);
+}
+
+.equipment-module .back-button {
+  background: #f5f5f5;
+  color: #666;
+  margin-bottom: 1.5rem;
+}
+
+.equipment-module .back-button:hover {
+  background: #e0e0e0;
+}
+
+.equipment-module .edit-btn {
+  background: #fff3cd;
+  color: #856404;
+  border: 2px solid #ffeeba;
+  font-size: 1rem;
+}
+
+.equipment-module .edit-btn:hover {
+  background: #ffeeba;
+}
+
+.equipment-module .delete-equipment-btn {
+  background: #f8d7da;
+  color: #721c24;
+  border: 2px solid #f5c6cb;
+}
+
+.equipment-module .delete-equipment-btn:hover {
+  background: #f5c6cb;
+  transform: translateY(-2px);
+}
+
+.equipment-module .search-bar input {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 1rem;
+  margin-bottom: 2rem;
+  transition: all 0.2s;
+}
+
+.equipment-module .search-bar input:focus {
+  outline: none;
+  border-color: var(--earth-mid);
+  box-shadow: 0 0 0 3px rgba(135, 169, 107, 0.1);
+}
+
+/* Equipment list grid */
+.equipment-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.equipment-card {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 15px var(--shadow);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.equipment-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.15);
+}
+
+.equipment-card h3 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.5rem;
+  color: var(--earth-dark);
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.5px;
+}
+
+.equipment-card .equipment-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.equipment-card .category-badge {
+  display: inline-block;
+  background: #e8f5e9;
+  color: var(--earth-dark);
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-top: 0.5rem;
+}
+
+/* Detail header */
+.equipment-detail-header {
+  background: linear-gradient(135deg, var(--earth-mid), var(--earth-dark));
+  color: var(--white);
+  padding: 1.5rem;
+  border-radius: 16px;
+  margin-bottom: 2rem;
+}
+
+.equipment-detail-header h3 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+  letter-spacing: 1px;
+}
+
+.equipment-detail-header p {
+  opacity: 0.9;
+  font-size: 1.05rem;
+}
+
+/* Overview card */
+.equipment-overview-card {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 2px 20px var(--shadow);
+  margin-bottom: 2rem;
+}
+
+.equipment-overview-card .year-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.equipment-overview-card .year-header h2 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.75rem;
+  color: var(--earth-dark);
+  letter-spacing: 1px;
+  margin: 0;
+}
+
+.equipment-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.equipment-module .stat-item .stat-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.equipment-module .stat-item .stat-value {
+  font-size: 1.2rem;
+  color: var(--earth-dark);
+  font-weight: 500;
+}
+
+/* Action buttons grid */
+.equipment-module .action-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.equipment-module .action-btn {
+  background: var(--white);
+  color: var(--earth-dark);
+  border: 2px solid #e0e0e0;
+  padding: 1.25rem 1rem;
+  text-align: center;
+}
+
+.equipment-module .action-btn:hover {
+  border-color: var(--earth-mid);
+  background: #f8f9fa;
+  transform: translateY(-2px);
+}
+
+.equipment-module .action-btn.jd-btn {
+  background: linear-gradient(135deg, #367c2b, #2d6623);
+  color: var(--white);
+  border-color: #2d6623;
+}
+
+.equipment-module .action-btn.jd-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(54, 124, 43, 0.3);
+}
+
+/* Timeline (service history) */
+.equipment-module .timeline-section {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 2px 15px var(--shadow);
+}
+
+.equipment-module .timeline-section h3 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.5rem;
+  color: var(--earth-dark);
+  margin-bottom: 1.5rem;
+  letter-spacing: 0.5px;
+}
+
+.equipment-module .timeline-item {
+  display: flex;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border-left: 4px solid var(--earth-mid);
+  margin-bottom: 0.75rem;
+  transition: all 0.2s;
+}
+
+.equipment-module .timeline-item:hover {
+  background: #f0f0f0;
+}
+
+.equipment-module .timeline-item .timeline-icon {
+  font-size: 2rem;
+  min-width: 3rem;
+  text-align: center;
+}
+
+.equipment-module .timeline-content {
+  flex: 1;
+}
+
+.equipment-module .timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.equipment-module .timeline-header h4 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.2rem;
+  color: var(--earth-dark);
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+
+.equipment-module .timeline-date {
+  background: var(--earth-mid);
+  color: var(--white);
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.equipment-module .timeline-details {
+  color: #666;
+  font-size: 0.95rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Sub-sections (alerts, parts, fuel, operators, field usage) */
+.equipment-subsection {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 15px var(--shadow);
+  margin-bottom: 1.5rem;
+}
+
+.equipment-subsection h4 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.3rem;
+  color: var(--earth-dark);
+  margin-bottom: 1rem;
+  letter-spacing: 0.5px;
+}
+
+.equipment-module .empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: #999;
+}
+
+.equipment-module .empty-state-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.equipment-module .loading {
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+/* Modal (reuse Fields pattern) */
+.equipment-module .modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.equipment-module .modal.active {
+  display: flex;
+}
+
+.equipment-module .modal-content {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 50px rgba(0, 0, 0, 0.3);
+}
+
+.equipment-module .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.equipment-module .modal-header h3 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.75rem;
+  color: var(--earth-dark);
+  letter-spacing: 1px;
+  margin: 0;
+}
+
+.equipment-module .close-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #999;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.equipment-module .close-btn:hover {
+  color: #333;
+}
+
+.equipment-module .form-group {
+  margin-bottom: 1.5rem;
+}
+
+.equipment-module .form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #555;
+}
+
+.equipment-module .form-group input,
+.equipment-module .form-group textarea,
+.equipment-module .form-group select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.equipment-module .form-group input:focus,
+.equipment-module .form-group textarea:focus,
+.equipment-module .form-group select:focus {
+  outline: none;
+  border-color: var(--earth-mid);
+  box-shadow: 0 0 0 3px rgba(135, 169, 107, 0.1);
+}
+
+.equipment-module .btn-primary {
+  width: 100%;
+  padding: 1rem;
+  background: linear-gradient(135deg, var(--earth-mid), var(--earth-dark));
+  color: var(--white);
+  border: none;
+  border-radius: 12px;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.2rem;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.equipment-module .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* Alerts list */
+.alert-item {
+  padding: 0.75rem 1rem;
+  background: #fff8e1;
+  border-left: 4px solid #ffa000;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+}
+
+.alert-item.due-soon {
+  background: #e8f5e9;
+  border-left-color: var(--earth-mid);
+}
+
+/* Reports panel */
+.reports-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.report-card {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 1rem;
+  border: 2px solid #e0e0e0;
+}
+
+.report-card h5 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.1rem;
+  color: var(--earth-dark);
+  margin-bottom: 0.5rem;
+}
+
+.report-card .report-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--earth-dark);
+}
+
+/* Tabs for detail view */
+.detail-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.detail-tabs button {
+  padding: 0.75rem 1.25rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  background: var(--white);
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.detail-tabs button:hover {
+  border-color: var(--earth-mid);
+  background: #f8f9fa;
+}
+
+.detail-tabs button.active {
+  background: linear-gradient(135deg, var(--earth-mid), var(--earth-dark));
+  color: var(--white);
+  border-color: var(--earth-dark);
+}
+
+@media (max-width: 768px) {
+  .equipment-module .module-content {
+    padding: 1rem;
+  }
+
+  .equipment-list {
+    grid-template-columns: 1fr;
+  }
+
+  .equipment-module .action-buttons-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .equipment-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .equipment-module .timeline-item {
+    flex-direction: column;
+  }
+}

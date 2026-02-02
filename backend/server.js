@@ -75,7 +75,9 @@ app.use('/api/field-reports', require('./routes/fieldReports'));
 app.use('/api/scouting-reports', require('./routes/scoutingReports'));
 app.use('/api/yield-maps', require('./routes/yieldMaps'));
 app.use('/api/field-operations', require('./routes/fieldOperations'));
-app.use('/api/equipment', require('./routes/equipment'));
+app.use('/api/equipment', require('./routes/equipmentMaintenance')); // nested :assetId/maintenance, schedule, parts, fuel, operators
+app.use('/api/equipment', require('./routes/equipment')); // list, get one, create, update, delete
+app.use('/api/equipment-jd', require('./routes/equipmentJDSync'));
 app.use('/api/grain', require('./routes/grain'));
 app.use('/api/inventory', require('./routes/inventory'));
 
