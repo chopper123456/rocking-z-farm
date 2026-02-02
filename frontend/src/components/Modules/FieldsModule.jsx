@@ -250,71 +250,6 @@ function FieldsModule({ user, onLogout }) {
     }
   };
 
-  const handleAddYear = async (e) => {
-    e.preventDefault();
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post(`${API_URL}/field-years`, {
-        fieldName: selectedField.field_name,
-        year: parseInt(newYear.year),
-        crop: '',
-        variety: '',
-        notes: ''
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      setShowAddYear(false);
-      setNewYear({ year: new Date().getFullYear() });
-      await loadYears(selectedField.field_name);
-      
-      // Automatically open the year
-      setSelectedYear(parseInt(newYear.year));
-      await loadYearDetails(selectedField.field_name, parseInt(newYear.year));
-      setView('year-detail');
-      alert('Year added successfully!');
-    } catch (error) {
-      console.error('Error adding year:', error);
-      if (error.response?.data?.error?.includes('already exists')) {
-        alert('This year already exists for this field');
-      } else {
-        alert('Failed to add year');
-      }
-    }
-  };
-
-  const handleQuickAddYear = async (year) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post(`${API_URL}/field-years`, {
-        fieldName: selectedField.field_name,
-        year: year,
-        crop: '',
-        variety: '',
-        notes: ''
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      await loadYears(selectedField.field_name);
-      
-      // Automatically open the year
-      setSelectedYear(year);
-      await loadYearDetails(selectedField.field_name, year);
-      setView('year-detail');
-    } catch (error) {
-      console.error('Error adding year:', error);
-      if (error.response?.data?.error?.includes('already exists')) {
-        // Year exists, just open it
-        setSelectedYear(year);
-        await loadYearDetails(selectedField.field_name, year);
-        setView('year-detail');
-      } else {
-        alert('Failed to add year');
-      }
-    }
-  };
-
   const handleUpdateYear = async (e) => {
     e.preventDefault();
     try {
@@ -887,33 +822,6 @@ function FieldsModule({ user, onLogout }) {
                   />
                 </div>
                 <button type="submit" className="btn-primary">Add Field</button>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* ADD YEAR MODAL */}
-        {showAddYear && (
-          <div className="modal active">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h3>Add Growing Season</h3>
-                <button className="close-btn" onClick={() => setShowAddYear(false)}>×</button>
-              </div>
-              <form onSubmit={handleAddYear}>
-                <div className="form-group">
-                  <label>Year *</label>
-                  <input
-                    type="number"
-                    required
-                    min="2000"
-                    max="2100"
-                    value={newYear.year}
-                    onChange={(e) => setNewYear({...newYear, year: e.target.value})}
-                  />
-                  <small>Enter any year (e.g., 2025, 2024, 2026)</small>
-                </div>
-                <button type="submit" className="btn-primary">Create Season</button>
               </form>
             </div>
           </div>
