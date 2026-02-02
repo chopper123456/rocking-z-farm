@@ -265,7 +265,7 @@ router.get('/activity-log', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
-    const limit = parseInt(req.query.limit) || 100;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
 
     const result = await db.query(`
       SELECT al.*, u.username 

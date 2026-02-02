@@ -5,6 +5,12 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 
+// Fail fast if JWT_SECRET is missing in production
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET is not set. Set it in your environment (e.g. Railway).');
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 

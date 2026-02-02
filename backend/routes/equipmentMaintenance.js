@@ -107,8 +107,9 @@ router.get('/:assetId/maintenance/:id/receipt', async (req, res) => {
       return res.status(404).json({ error: 'Receipt not found' });
     }
     const row = result.rows[0];
+    const safeName = (row.receipt_name || 'receipt').replace(/[\r\n"]/g, '').slice(0, 200) || 'receipt';
     res.setHeader('Content-Type', row.receipt_type || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${row.receipt_name || 'receipt'}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
     res.send(row.receipt_data);
   } catch (error) {
     console.error('Error downloading receipt:', error);

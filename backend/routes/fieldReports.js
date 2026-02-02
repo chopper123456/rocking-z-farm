@@ -8,9 +8,16 @@ router.use(authMiddleware);
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
-const upload = multer({ 
+const upload = multer({
   storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF and image files allowed'), false);
+    }
+  },
 });
 
 // Get all reports for a field and year
@@ -59,8 +66,9 @@ router.get('/download/:id', async (req, res) => {
     }
     
     const report = result.rows[0];
-    res.setHeader('Content-Type', report.file_type);
-    res.setHeader('Content-Disposition', `attachment; filename="${report.file_name}"`);
+    const safeName = (report.file_name || 'report').replace(/[\r\n"]/g, '').slice(0, 200) || 'report';
+    res.setHeader('Content-Type', report.file_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
     res.send(report.file_data);
   } catch (error) {
     console.error('Error downloading report:', error);
