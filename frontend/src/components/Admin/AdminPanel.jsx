@@ -81,7 +81,10 @@ function AdminPanel({ user, onLogout }) {
       alert('Employee account created successfully!');
     } catch (error) {
       console.error('Error creating user:', error);
-      alert(error.response?.data?.error || 'Failed to create user');
+      const errorMsg = error.response?.data?.error || 
+                      error.response?.data?.errors?.[0]?.msg ||
+                      'Failed to create user';
+      alert(errorMsg);
     }
   };
 
