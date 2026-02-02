@@ -103,9 +103,20 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`
+// Run equipment migration on startup (creates tables if missing - safe for Railway)
+const db = require('./config/database');
+const { runEquipmentMigration } = require('./lib/equipmentMigration');
+
+async function start() {
+  try {
+    await runEquipmentMigration(db);
+    console.log('✓ Equipment tables ready');
+  } catch (err) {
+    console.error('Equipment migration failed:', err.message);
+    // Still start server so Fields and other modules work
+  }
+  app.listen(PORT, () => {
+    console.log(`
   ╔═══════════════════════════════════════════════╗
   ║   🌾 Rocking Z Farm API Server Running 🌾   ║
   ╠═══════════════════════════════════════════════╣
@@ -116,6 +127,9 @@ app.listen(PORT, () => {
   ║   Compression: Enabled                        ║
   ╚═══════════════════════════════════════════════╝
   `);
-});
+  });
+}
+
+start();
 
 module.exports = app;
