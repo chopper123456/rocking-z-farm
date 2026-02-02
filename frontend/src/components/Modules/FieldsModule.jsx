@@ -23,6 +23,8 @@ function FieldsModule({ user, onLogout }) {
   const [showAddScouting, setShowAddScouting] = useState(false);
   const [showUploadYield, setShowUploadYield] = useState(false);
   const [showEditYear, setShowEditYear] = useState(false);
+  const [showCustomYear, setShowCustomYear] = useState(false);
+  const [showManageField, setShowManageField] = useState(false);
 
   const [newField, setNewField] = useState({
     fieldName: '',
@@ -248,6 +250,39 @@ function FieldsModule({ user, onLogout }) {
     }
   };
 
+  const handleAddYear = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_URL}/field-years`, {
+        fieldName: selectedField.field_name,
+        year: parseInt(newYear.year),
+        crop: '',
+        variety: '',
+        notes: ''
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setShowAddYear(false);
+      setNewYear({ year: new Date().getFullYear() });
+      await loadYears(selectedField.field_name);
+      
+      // Automatically open the year
+      setSelectedYear(parseInt(newYear.year));
+      await loadYearDetails(selectedField.field_name, parseInt(newYear.year));
+      setView('year-detail');
+      alert('Year added successfully!');
+    } catch (error) {
+      console.error('Error adding year:', error);
+      if (error.response?.data?.error?.includes('already exists')) {
+        alert('This year already exists for this field');
+      } else {
+        alert('Failed to add year');
+      }
+    }
+  };
+
   const handleQuickAddYear = async (year) => {
     try {
       const token = localStorage.getItem('token');
@@ -301,7 +336,53 @@ function FieldsModule({ user, onLogout }) {
   const handleFieldClick = async (field) => {
     setSelectedField(field);
     await loadYears(field.field_name);
-    setView('field-detail');
+    
+    // Always try to open current year, create if doesn't exist
+    const currentYear = new Date().getFullYear();
+    const currentYearData = await checkYearExists(field.field_name, currentYear);
+    
+    if (currentYearData) {
+      // Current year exists, open it automatically
+      setSelectedYear(currentYear);
+      await loadYearDetails(field.field_name, currentYear);
+      setView('year-detail');
+    } else {
+      // Current year doesn't exist, create it automatically
+      try {
+        const token = localStorage.getItem('token');
+        await axios.post(`${API_URL}/field-years`, {
+          fieldName: field.field_name,
+          year: currentYear,
+          crop: '',
+          variety: '',
+          notes: ''
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        // Reload years and open the new current year
+        await loadYears(field.field_name);
+        setSelectedYear(currentYear);
+        await loadYearDetails(field.field_name, currentYear);
+        setView('year-detail');
+      } catch (error) {
+        console.error('Error creating current year:', error);
+        // If creation fails, show field detail view with year buttons
+        setView('field-detail');
+      }
+    }
+  };
+
+  const checkYearExists = async (fieldName, year) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_URL}/field-years/${fieldName}/${year}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return response.data;
+    } catch (error) {
+      return null;
+    }
   };
 
   const handleYearClick = async (year) => {
@@ -311,12 +392,22 @@ function FieldsModule({ user, onLogout }) {
   };
 
   const handleDeleteField = async (fieldId) => {
-    if (!window.confirm('Are you sure you want to delete this field?')) return;
+    // First confirmation
+    if (!window.confirm('⚠️ DELETE FIELD - Are you sure?\n\nThis will delete the field and ALL data (years, reports, operations, etc.)')) {
+      return;
+    }
+    
+    // Second confirmation
+    if (!window.confirm('⚠️ FINAL WARNING!\n\nThis cannot be undone. Delete this field permanently?')) {
+      return;
+    }
+    
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`${API_URL}/fields/${fieldId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      setView('list');
       loadFields();
       alert('Field deleted successfully!');
     } catch (error) {
@@ -547,23 +638,12 @@ function FieldsModule({ user, onLogout }) {
             ) : (
               <div className="field-list">
                 {filteredFields.map((field) => (
-                  <div key={field.id} className="field-card">
-                    <div className="field-card-content" onClick={() => handleFieldClick(field)}>
-                      <h3>{field.field_name}</h3>
-                      <div className="field-info">
-                        {field.acreage && <span>📏 {field.acreage} acres</span>}
-                        {field.soil_type && <span>🌱 {field.soil_type}</span>}
-                      </div>
+                  <div key={field.id} className="field-card" onClick={() => handleFieldClick(field)}>
+                    <h3>{field.field_name}</h3>
+                    <div className="field-info">
+                      {field.acreage && <span>📏 {field.acreage} acres</span>}
+                      {field.soil_type && <span>🌱 {field.soil_type}</span>}
                     </div>
-                    <button 
-                      className="delete-btn" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteField(field.id);
-                      }}
-                    >
-                      🗑️
-                    </button>
                   </div>
                 ))}
               </div>
@@ -574,9 +654,14 @@ function FieldsModule({ user, onLogout }) {
         {/* FIELD DETAIL VIEW - Year Selection */}
         {view === 'field-detail' && selectedField && (
           <>
-            <button className="back-button" onClick={() => setView('list')}>
-              ← Back to Fields
-            </button>
+            <div className="field-actions-bar">
+              <button className="back-button" onClick={() => setView('list')}>
+                ← Back to Fields
+              </button>
+              <button className="delete-field-btn" onClick={() => handleDeleteField(selectedField.id)}>
+                🗑️ Delete Field
+              </button>
+            </div>
             
             <div className="field-detail-header">
               <h3>{selectedField.field_name}</h3>
@@ -586,23 +671,20 @@ function FieldsModule({ user, onLogout }) {
               </p>
             </div>
 
-            <div className="quick-year-buttons">
-              <button className="year-quick-btn" onClick={() => handleQuickAddYear(prevYear)}>
-                {prevYear} Season
-              </button>
-              <button className="year-quick-btn primary" onClick={() => handleQuickAddYear(currentYear)}>
-                {currentYear} Season
-              </button>
-              <button className="year-quick-btn" onClick={() => handleQuickAddYear(nextYear)}>
-                {nextYear} Season
-              </button>
-            </div>
+            <div className="years-section">
+              <div className="section-header">
+                <h3>Select Growing Season</h3>
+                <button className="add-button" onClick={() => setShowAddYear(true)}>
+                  + Add Year
+                </button>
+              </div>
 
-            {years.length > 0 && (
-              <>
-                <div className="divider">
-                  <span>Or select previous season</span>
+              {years.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state-icon">📅</div>
+                  <p>No years yet. Click "+ Add Year" to start tracking this field.</p>
                 </div>
+              ) : (
                 <div className="year-list">
                   {years.map((year) => (
                     <div 
@@ -618,17 +700,49 @@ function FieldsModule({ user, onLogout }) {
                     </div>
                   ))}
                 </div>
-              </>
-            )}
+              )}
+            </div>
           </>
         )}
 
         {/* YEAR DETAIL VIEW - Timeline */}
         {view === 'year-detail' && selectedField && selectedYear && yearDetails && (
           <>
-            <button className="back-button" onClick={() => setView('field-detail')}>
-              ← Back to Field
-            </button>
+            <div className="top-bar">
+              <button className="back-button" onClick={() => setView('list')}>
+                ← Back to Fields
+              </button>
+              
+              <div className="year-selector">
+                <label>Viewing:</label>
+                <select 
+                  value={selectedYear} 
+                  onChange={async (e) => {
+                    const newYear = parseInt(e.target.value);
+                    setSelectedYear(newYear);
+                    await loadYearDetails(selectedField.field_name, newYear);
+                  }}
+                  className="year-dropdown"
+                >
+                  {years.sort((a, b) => b.year - a.year).map(y => (
+                    <option key={y.year} value={y.year}>
+                      {y.year} Season {y.crop && `- ${y.crop}`}
+                    </option>
+                  ))}
+                </select>
+                
+                <button 
+                  className="add-year-btn" 
+                  onClick={() => setShowCustomYear(true)}
+                >
+                  + Add Year
+                </button>
+              </div>
+              
+              <button className="manage-field-btn" onClick={() => setShowManageField(true)}>
+                ⚙️ Manage Field
+              </button>
+            </div>
             
             <div className="year-overview-card">
               <div className="year-header">
@@ -773,6 +887,33 @@ function FieldsModule({ user, onLogout }) {
                   />
                 </div>
                 <button type="submit" className="btn-primary">Add Field</button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ADD YEAR MODAL */}
+        {showAddYear && (
+          <div className="modal active">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h3>Add Growing Season</h3>
+                <button className="close-btn" onClick={() => setShowAddYear(false)}>×</button>
+              </div>
+              <form onSubmit={handleAddYear}>
+                <div className="form-group">
+                  <label>Year *</label>
+                  <input
+                    type="number"
+                    required
+                    min="2000"
+                    max="2100"
+                    value={newYear.year}
+                    onChange={(e) => setNewYear({...newYear, year: e.target.value})}
+                  />
+                  <small>Enter any year (e.g., 2025, 2024, 2026)</small>
+                </div>
+                <button type="submit" className="btn-primary">Create Season</button>
               </form>
             </div>
           </div>
@@ -1057,6 +1198,115 @@ function FieldsModule({ user, onLogout }) {
                 </div>
                 <button type="submit" className="btn-primary">Upload Yield Map</button>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* ADD CUSTOM YEAR MODAL */}
+        {showCustomYear && selectedField && (
+          <div className="modal active">
+            <div className="modal-content small">
+              <div className="modal-header">
+                <h3>Add Year to {selectedField.field_name}</h3>
+                <button className="close-btn" onClick={() => setShowCustomYear(false)}>×</button>
+              </div>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const yearInput = e.target.customYear.value;
+                const year = parseInt(yearInput);
+                
+                if (year < 1900 || year > 2100) {
+                  alert('Please enter a valid year between 1900 and 2100');
+                  return;
+                }
+                
+                try {
+                  const token = localStorage.getItem('token');
+                  await axios.post(`${API_URL}/field-years`, {
+                    fieldName: selectedField.field_name,
+                    year: year,
+                    crop: '',
+                    variety: '',
+                    notes: ''
+                  }, {
+                    headers: { Authorization: `Bearer ${token}` }
+                  });
+                  
+                  await loadYears(selectedField.field_name);
+                  setSelectedYear(year);
+                  await loadYearDetails(selectedField.field_name, year);
+                  setShowCustomYear(false);
+                  alert(`${year} season added successfully!`);
+                } catch (error) {
+                  if (error.response?.data?.error?.includes('already exists')) {
+                    // Year exists, just switch to it
+                    setSelectedYear(year);
+                    await loadYearDetails(selectedField.field_name, year);
+                    setShowCustomYear(false);
+                  } else {
+                    alert('Failed to add year');
+                  }
+                }
+              }}>
+                <div className="form-group">
+                  <label>Year *</label>
+                  <input
+                    type="number"
+                    name="customYear"
+                    required
+                    min="1900"
+                    max="2100"
+                    defaultValue={new Date().getFullYear() + 1}
+                    placeholder="Enter year (e.g., 2026)"
+                  />
+                </div>
+                <button type="submit" className="btn-primary">Add Year</button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MANAGE FIELD MODAL */}
+        {showManageField && selectedField && (
+          <div className="modal active">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h3>Manage {selectedField.field_name}</h3>
+                <button className="close-btn" onClick={() => setShowManageField(false)}>×</button>
+              </div>
+              
+              <div className="manage-options">
+                <div className="manage-section">
+                  <h4>Field Details</h4>
+                  <p><strong>Name:</strong> {selectedField.field_name}</p>
+                  <p><strong>Acreage:</strong> {selectedField.acreage || 'Not set'} acres</p>
+                  <p><strong>Soil Type:</strong> {selectedField.soil_type || 'Not set'}</p>
+                  <p><strong>Irrigation:</strong> {selectedField.irrigation_type || 'Not set'}</p>
+                  {selectedField.notes && <p><strong>Notes:</strong> {selectedField.notes}</p>}
+                </div>
+                
+                <div className="manage-section danger-zone">
+                  <h4>⚠️ Danger Zone</h4>
+                  <p>Permanently delete this field and all associated data:</p>
+                  <ul>
+                    <li>All years and crop data</li>
+                    <li>All soil and tissue reports</li>
+                    <li>All scouting notes</li>
+                    <li>All operations data</li>
+                    <li>All yield maps</li>
+                  </ul>
+                  <p><strong>This cannot be undone!</strong></p>
+                  <button 
+                    className="btn-danger"
+                    onClick={() => {
+                      setShowManageField(false);
+                      handleDeleteField(selectedField.id);
+                    }}
+                  >
+                    🗑️ Delete Field Permanently
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
