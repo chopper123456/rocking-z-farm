@@ -41,21 +41,25 @@ async function getJDAccess() {
   return { accessToken, orgId: enabledOrg.id, org: enabledOrg };
 }
 
-// Helper: extract equipment fields from JD machine/asset object (flat or nested)
+// Helper: extract equipment fields from JD Equipment API or platform response (flat or nested)
 function parseJDMachine(item) {
-  const name = item.name || item.displayName || item.title || item.description || (item.model && (item.model.displayName || item.model.name)) || item.id || 'Unknown';
-  const jdId = item.id || item['@id'] || item.assetId || item.machineId;
-  if (!jdId) return null;
+  const name = item.name || item.displayName || item.title || item.description || (item.model && (item.model.displayName || item.model.name)) || (Array.isArray(item.model) ? item.model[0]?.name : null) || item.id || 'Unknown';
+  const jdId = item.id || item['@id'] || item.assetId || item.machineId || item.principalId;
+  if (jdId == null || jdId === '') return null;
 
-  const make = item.make || item.brand || (item.model && item.model.brand) || (item.model && item.model.make) || null;
+  // Equipment API: make/type/model are objects (or arrays) with .name
+  const makeObj = item.make;
+  const make = typeof makeObj === 'string' ? makeObj : (makeObj?.name || (Array.isArray(makeObj) && makeObj[0]?.name) || item.brand || null);
+  const typeObj = item.type || item.isgType;
+  const typeName = typeof typeObj === 'string' ? typeObj : (typeObj?.name || (Array.isArray(typeObj) && typeObj[0]?.name) || item.category || null);
   const modelVal = item.model;
-  const model = typeof modelVal === 'string' ? modelVal : (modelVal && (modelVal.name || modelVal.displayName || modelVal.modelName)) || item.modelName || null;
-  const year = item.year != null ? parseInt(item.year) : (item.model && item.model.year != null ? parseInt(item.model.year) : null);
+  const model = typeof modelVal === 'string' ? modelVal : (modelVal && (modelVal.name || modelVal.displayName || modelVal.modelName)) || (Array.isArray(modelVal) && modelVal[0]?.name) || item.modelName || null;
+  const year = item.modelYear != null ? parseInt(item.modelYear) : (item.year != null ? parseInt(item.year) : (item.model && item.model.year != null ? parseInt(item.model.year) : null));
   const serialNumber = item.serialNumber || item.serial || item.serialNo || null;
   const hours = item.hours != null ? parseFloat(item.hours) : item.totalEngineHours != null ? parseFloat(item.totalEngineHours) : item.engineHours != null ? parseFloat(item.engineHours) : (item.meters && item.meters.engineHours != null) ? parseFloat(item.meters.engineHours) : null;
-  const typeRaw = (item.type || item.category || item.kind || (item.model && item.model.type) || 'machine').toLowerCase();
-  const catMap = { tractor: 'tractor', combine: 'combine', sprayer: 'sprayer', implement: 'implement', machine: 'tractor', harvester: 'combine', applicator: 'sprayer' };
-  const category = catMap[typeRaw] || 'tractor';
+  const typeRaw = (typeName || item.category || item.kind || 'machine').toLowerCase();
+  const catMap = { tractor: 'tractor', combine: 'combine', sprayer: 'sprayer', implement: 'implement', machine: 'tractor', harvester: 'combine', applicator: 'sprayer', 'four-wheel drive tractor': 'tractor', 'two-wheel drive': 'tractor' };
+  const category = catMap[typeRaw] || (item['@type'] === 'Implement' ? 'implement' : 'tractor');
 
   return { name, jdId: String(jdId), make, model, year, serialNumber, hours, category, raw: item };
 }
@@ -69,37 +73,85 @@ router.post('/sync', async (req, res) => {
     }
 
     const { accessToken, orgId, org } = jd;
-    const headers = {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/vnd.deere.axiom.v3+json',
-    };
     let assetsAdded = 0;
     let totalFetched = 0;
     const triedEndpoints = [];
+    let got403 = false;
 
-    // 1) URLs from org links (JD often exposes machines via link rel)
-    const linkRels = ['machines', 'assets', 'equipment', 'equipmentList'];
-    let urlsToTry = [];
-    if (org && org.links && Array.isArray(org.links)) {
-      for (const rel of linkRels) {
-        const link = org.links.find((l) => l.rel === rel);
-        if (link && link.uri) {
-          const u = link.uri.startsWith('http') ? link.uri : `${JD_API_URL.replace(/\/$/, '')}${link.uri.startsWith('/') ? link.uri : '/' + link.uri}`;
-          urlsToTry.push(u);
+    // Equipment API (official): GET /equipment?organizationIds=xxx — OAuth scope eq1, Accept: application/json
+    const JD_EQUIPMENT_API = 'https://equipmentapi.deere.com/isg';
+    const equipmentApiUrl = `${JD_EQUIPMENT_API}/equipment?organizationIds=${orgId}&itemLimit=100`;
+    const equipmentHeaders = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    };
+
+    // Try Equipment API first (correct endpoint per John Deere docs)
+    let nextPageUrl = equipmentApiUrl;
+    const seenIds = new Set();
+
+    while (nextPageUrl) {
+      try {
+        const response = await axios.get(nextPageUrl, { headers: equipmentHeaders });
+        triedEndpoints.push(nextPageUrl);
+        const data = response.data;
+        const list = data.values || (Array.isArray(data) ? data : []);
+        const items = Array.isArray(list) ? list : (list && typeof list === 'object' && !Array.isArray(list) ? [list] : []);
+
+        for (const item of items) {
+          const parsed = parseJDMachine(item);
+          if (!parsed || seenIds.has(parsed.jdId)) continue;
+          seenIds.add(parsed.jdId);
+          totalFetched++;
+
+          const existing = await db.query(
+            'SELECT id FROM equipment_assets WHERE jd_asset_id = $1 AND user_id = $2',
+            [parsed.jdId, userId]
+          );
+          if (existing.rows.length > 0) {
+            await db.query(
+              'UPDATE equipment_assets SET name = $1, make = $2, model = $3, year = $4, serial_number = $5, current_hours = COALESCE($6, current_hours), jd_raw_data = $7, updated_at = CURRENT_TIMESTAMP WHERE id = $8',
+              [parsed.name, parsed.make, parsed.model, parsed.year, parsed.serialNumber, parsed.hours, JSON.stringify(parsed.raw), existing.rows[0].id]
+            );
+            continue;
+          }
+          await db.query(
+            `INSERT INTO equipment_assets (user_id, name, category, make, model, year, serial_number, current_hours, jd_asset_id, jd_raw_data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            [userId, parsed.name, parsed.category, parsed.make, parsed.model, parsed.year, parsed.serialNumber, parsed.hours, parsed.jdId, JSON.stringify(parsed.raw)]
+          );
+          assetsAdded++;
         }
+
+        const nextLink = data.links && (Array.isArray(data.links) ? data.links.find((l) => l.rel === 'nextPage') : null);
+        nextPageUrl = nextLink && nextLink.uri ? nextLink.uri : null;
+        if (items.length === 0 && !nextPageUrl) break;
+      } catch (err) {
+        if (err.response && err.response.status === 403) got403 = true;
+        if (err.response) {
+          console.error('Equipment API error:', nextPageUrl, err.response.status, err.response.data && JSON.stringify(err.response.data).slice(0, 300));
+        }
+        nextPageUrl = null;
       }
     }
-    // 2) Platform paths (same pattern as fields)
-    urlsToTry.push(
+
+    if (totalFetched > 0) {
+      return res.json({
+        message: `Synced equipment from John Deere. ${assetsAdded} new asset(s) added, ${totalFetched} total from JD.`,
+        assetsAdded,
+        totalFetched,
+      });
+    }
+
+    // Fallback: try platform paths (in case sandbox uses different base)
+    const platformHeaders = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/vnd.deere.axiom.v3+json',
+    };
+    const urlsToTry = [
       `${JD_API_URL}/organizations/${orgId}/machines`,
       `${JD_API_URL}/organizations/${orgId}/assets`,
-      `${JD_API_URL}/organizations/${orgId}/equipment`
-    );
-    // 3) New Equipment API base (some apps use this)
-    const JD_EQUIPMENT_API = 'https://equipmentapi.deere.com/isg';
-    urlsToTry.push(`${JD_EQUIPMENT_API}/organizations/${orgId}/equipment`, `${JD_EQUIPMENT_API}/organizations/${orgId}/machines`);
-
-    urlsToTry = [...new Set(urlsToTry)];
+      `${JD_API_URL}/organizations/${orgId}/equipment`,
+    ];
 
     for (const startUrl of urlsToTry) {
       let nextPageUrl = startUrl;
@@ -107,7 +159,7 @@ router.post('/sync', async (req, res) => {
 
       while (nextPageUrl) {
         try {
-          const response = await axios.get(nextPageUrl, { headers });
+          const response = await axios.get(nextPageUrl, { headers: platformHeaders });
           triedEndpoints.push(nextPageUrl);
 
           const data = response.data;
@@ -156,6 +208,7 @@ router.post('/sync', async (req, res) => {
           nextPageUrl = nextLink && nextLink.uri ? nextLink.uri : null;
           if (items.length === 0 && !nextPageUrl) break;
         } catch (err) {
+          if (err.response && err.response.status === 403) got403 = true;
           if (err.response && err.response.status !== 404) {
             console.error('JD equipment endpoint error:', nextPageUrl, err.response.status, err.response.data && JSON.stringify(err.response.data).slice(0, 200));
           }
@@ -173,18 +226,29 @@ router.post('/sync', async (req, res) => {
     }
 
     // Fallback: add equipment from field operations (equipment_used from JD operations)
-    const fromOps = await syncEquipmentFromFieldOperations();
+    let fromOps = 0;
+    try {
+      fromOps = await syncEquipmentFromFieldOperations();
+    } catch (fallbackErr) {
+      console.error('Equipment fallback from field operations failed:', fallbackErr);
+    }
     if (fromOps > 0) {
+      const msg = got403
+        ? `John Deere returned Forbidden (403) for the equipment list—your org may need equipment access in Operations Center. We added ${fromOps} equipment from your field operations.`
+        : `No equipment list from John Deere. Added ${fromOps} equipment from your field operations.`;
       return res.json({
-        message: `No equipment list from John Deere machines API. Added ${fromOps} equipment from your field operations (from JD).`,
+        message: msg,
         assetsAdded: fromOps,
         totalFetched: 0,
         fromFieldOperations: true,
       });
     }
 
+    const noDataMsg = got403
+      ? 'John Deere returned Forbidden (403) for the equipment list—your app may not have equipment access. Use "Add from field operations" after syncing field operations in the Fields module to add equipment names from JD operations.'
+      : 'John Deere sync completed. No equipment found. Sync field operations first (Fields module), then click "Add from field operations" to add equipment names from JD.';
     return res.json({
-      message: 'John Deere sync completed. No equipment found. Sync field operations first (Fields module) so equipment names from JD can be added here.',
+      message: noDataMsg,
       assetsAdded: 0,
       totalFetched: 0,
       triedEndpoints: [...new Set(triedEndpoints)],

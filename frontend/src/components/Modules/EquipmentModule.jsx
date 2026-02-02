@@ -30,6 +30,10 @@ function EquipmentModule({ user, onLogout }) {
   const [fuelReport, setFuelReport] = useState([]);
   const [detailTab, setDetailTab] = useState('overview');
 
+  const [syncingJD, setSyncingJD] = useState(false);
+  const [syncingOps, setSyncingOps] = useState(false);
+  const [syncMessage, setSyncMessage] = useState(null);
+
   const [showAddEquipment, setShowAddEquipment] = useState(false);
   const [showEditEquipment, setShowEditEquipment] = useState(false);
   const [showAddService, setShowAddService] = useState(false);
@@ -292,25 +296,41 @@ function EquipmentModule({ user, onLogout }) {
   };
 
   const handleSyncFromJD = async () => {
+    setSyncingJD(true);
+    setSyncMessage(null);
     try {
       const res = await axios.post(`${API_URL}/equipment-jd/sync`, {}, { headers: headers() });
       loadEquipment();
       loadAlerts();
-      alert(res.data.message || 'Sync complete.');
+      const msg = res.data.message || 'Sync complete.';
+      setSyncMessage(msg);
+      alert(msg);
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.error || 'Failed to sync from John Deere.');
+      const errMsg = err.response?.data?.error || err.message || 'Failed to sync from John Deere.';
+      setSyncMessage(errMsg);
+      alert(errMsg);
+    } finally {
+      setSyncingJD(false);
     }
   };
 
   const handleSyncFromOperations = async () => {
+    setSyncingOps(true);
+    setSyncMessage(null);
     try {
       const res = await axios.post(`${API_URL}/equipment-jd/sync-from-operations`, {}, { headers: headers() });
       loadEquipment();
-      alert(res.data.message || 'Done.');
+      const msg = res.data.message || 'Done.';
+      setSyncMessage(msg);
+      alert(msg);
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.error || 'Failed.');
+      const errMsg = err.response?.data?.error || err.message || 'Failed.';
+      setSyncMessage(errMsg);
+      alert(errMsg);
+    } finally {
+      setSyncingOps(false);
     }
   };
 
@@ -374,16 +394,28 @@ function EquipmentModule({ user, onLogout }) {
             <div className="section-header">
               <h2>🚜 Equipment</h2>
               <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <button className="action-btn jd-btn" onClick={handleSyncFromJD}>
-                  🚜 Sync from John Deere
+                <button className="action-btn jd-btn" onClick={handleSyncFromJD} disabled={syncingJD} title="Try John Deere machines API, then add equipment from field operations">
+                  {syncingJD ? '⏳ Syncing...' : '🚜 Sync from John Deere'}
                 </button>
-                <button className="action-btn" onClick={handleSyncFromOperations} title="Add equipment names from your synced field operations">
-                  📋 Add from field operations
+                <button className="action-btn" onClick={handleSyncFromOperations} disabled={syncingOps} title="Add equipment names from your synced field operations">
+                  {syncingOps ? '⏳ Adding...' : '📋 Add from field operations'}
                 </button>
                 <button className="add-button" onClick={() => setShowAddEquipment(true)}>
                   + Add Equipment
                 </button>
               </div>
+            </div>
+            {syncMessage && (
+              <div className="equipment-subsection" style={{ marginBottom: '1rem', background: '#f0f7f0', borderLeft: '4px solid var(--earth-mid)' }}>
+                <p style={{ margin: 0, color: '#333' }}>{syncMessage}</p>
+                <button type="button" onClick={() => setSyncMessage(null)} style={{ marginTop: '0.5rem', fontSize: '0.9rem', background: 'none', border: 'none', color: '#666', cursor: 'pointer', textDecoration: 'underline' }}>Dismiss</button>
+              </div>
+            )}
+
+            <div className="equipment-subsection" style={{ marginBottom: '1rem', background: '#f8f9fa', borderLeft: '4px solid #6c757d' }}>
+              <p style={{ margin: 0, color: '#555', fontSize: '0.95rem' }}>
+                <strong>Why can Fields sync but not Equipment?</strong> John Deere uses separate API products. Your app has <strong>Fields</strong> and <strong>Field Operations</strong> access; the <strong>Machines</strong> API is a different product (that’s the 403). You can still get equipment from John Deere: sync <strong>field operations</strong> in the Fields module (per field/year), then click <strong>“Add from field operations”</strong> above to add equipment names from those operations.
+              </p>
             </div>
 
             {alerts.length > 0 && (

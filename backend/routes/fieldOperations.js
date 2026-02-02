@@ -111,6 +111,10 @@ router.post('/sync/:fieldName/:year', async (req, res) => {
             );
             
             if (existingOp.rows.length === 0) {
+              // Extract equipment from various JD response shapes (Field Operations API includes machine/equipment when present)
+              const equipmentUsed = op.machine?.name || op.machine?.displayName || op.equipment
+                || op.equipmentDisplayName || op.sourceDevice?.name || op.implement?.name
+                || (typeof op.machine === 'string' ? op.machine : null) || null;
               // Add operation
               await db.query(
                 `INSERT INTO field_operations 
@@ -124,7 +128,7 @@ router.post('/sync/:fieldName/:year', async (req, res) => {
                   opYear,
                   op.operationType || op.type || 'Unknown',
                   opDate.toISOString().split('T')[0],
-                  op.machine?.name || op.equipment || null,
+                  equipmentUsed,
                   op.operator || null,
                   op.product || op.material || null,
                   op.rate || op.applicationRate || null,
