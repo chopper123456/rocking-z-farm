@@ -38,11 +38,29 @@ async function getJDAccess() {
   if (!enabledOrg) {
     return { error: 'No enabled organization found. Enable John Deere organization access first.' };
   }
-  return { accessToken, orgId: enabledOrg.id };
+  return { accessToken, orgId: enabledOrg.id, org: enabledOrg };
+}
+
+// Helper: extract equipment fields from JD machine/asset object (flat or nested)
+function parseJDMachine(item) {
+  const name = item.name || item.displayName || item.title || item.description || (item.model && (item.model.displayName || item.model.name)) || item.id || 'Unknown';
+  const jdId = item.id || item['@id'] || item.assetId || item.machineId;
+  if (!jdId) return null;
+
+  const make = item.make || item.brand || (item.model && item.model.brand) || (item.model && item.model.make) || null;
+  const modelVal = item.model;
+  const model = typeof modelVal === 'string' ? modelVal : (modelVal && (modelVal.name || modelVal.displayName || modelVal.modelName)) || item.modelName || null;
+  const year = item.year != null ? parseInt(item.year) : (item.model && item.model.year != null ? parseInt(item.model.year) : null);
+  const serialNumber = item.serialNumber || item.serial || item.serialNo || null;
+  const hours = item.hours != null ? parseFloat(item.hours) : item.totalEngineHours != null ? parseFloat(item.totalEngineHours) : item.engineHours != null ? parseFloat(item.engineHours) : (item.meters && item.meters.engineHours != null) ? parseFloat(item.meters.engineHours) : null;
+  const typeRaw = (item.type || item.category || item.kind || (item.model && item.model.type) || 'machine').toLowerCase();
+  const catMap = { tractor: 'tractor', combine: 'combine', sprayer: 'sprayer', implement: 'implement', machine: 'tractor', harvester: 'combine', applicator: 'sprayer' };
+  const category = catMap[typeRaw] || 'tractor';
+
+  return { name, jdId: String(jdId), make, model, year, serialNumber, hours, category, raw: item };
 }
 
 // Sync equipment list from John Deere Operations Center
-// JD Platform may expose assets/machines under organizations or a separate link
 router.post('/sync', async (req, res) => {
   try {
     const jd = await getJDAccess();
@@ -50,95 +68,126 @@ router.post('/sync', async (req, res) => {
       return res.status(400).json({ error: jd.error });
     }
 
-    const { accessToken, orgId } = jd;
+    const { accessToken, orgId, org } = jd;
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/vnd.deere.axiom.v3+json',
+    };
     let assetsAdded = 0;
+    let totalFetched = 0;
     const triedEndpoints = [];
 
-    // Try common JD equipment/asset endpoints (sandbox may vary)
-    const endpointsToTry = [
-      `${JD_API_URL}/organizations/${orgId}/assets`,
-      `${JD_API_URL}/organizations/${orgId}/machines`,
-      `${JD_API_URL}/organizations/${orgId}/equipment`,
-    ];
-
-    for (const url of endpointsToTry) {
-      try {
-        const response = await axios.get(url, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/vnd.deere.axiom.v3+json',
-          },
-        });
-        triedEndpoints.push(url);
-
-        const values = response.data.values || response.data;
-        const list = Array.isArray(values) ? values : (values && values.length ? values : []);
-
-        for (const item of list) {
-          const name = item.name || item.displayName || item.title || item.id || 'Unknown';
-          const jdId = item.id || item['@id'] || item.assetId;
-          if (!jdId) continue;
-
-          const existing = await db.query(
-            'SELECT id FROM equipment_assets WHERE jd_asset_id = $1 AND user_id = $2',
-            [String(jdId), userId]
-          );
-          if (existing.rows.length > 0) {
-            await db.query(
-              'UPDATE equipment_assets SET jd_raw_data = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-              [JSON.stringify(item), existing.rows[0].id]
-            );
-            continue;
-          }
-
-          const make = item.make || item.brand || null;
-          const model = item.model || null;
-          const year = item.year ? parseInt(item.year) : null;
-          const serialNumber = item.serialNumber || item.serial || null;
-          const hours = item.hours != null ? parseFloat(item.hours) : null;
-          const category = (item.type || item.category || 'tractor').toLowerCase();
-          const catMap = { tractor: 'tractor', combine: 'combine', sprayer: 'sprayer', implement: 'implement', machine: 'tractor' };
-          const categoryFinal = catMap[category] || 'tractor';
-
-          await db.query(
-            `INSERT INTO equipment_assets (
-              user_id, name, category, make, model, year, serial_number, current_hours, jd_asset_id, jd_raw_data
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-            [
-              userId,
-              name,
-              categoryFinal,
-              make,
-              model,
-              year,
-              serialNumber,
-              hours,
-              String(jdId),
-              JSON.stringify(item),
-            ]
-          );
-          assetsAdded++;
-        }
-
-        if (list.length > 0) {
-          return res.json({
-            message: `Synced equipment from John Deere. ${assetsAdded} new asset(s) added.`,
-            assetsAdded,
-            totalChecked: list.length,
-          });
-        }
-      } catch (err) {
-        if (err.response?.status !== 404) {
-          console.error('JD equipment endpoint error:', url, err.response?.data || err.message);
+    // 1) URLs from org links (JD often exposes machines via link rel)
+    const linkRels = ['machines', 'assets', 'equipment', 'equipmentList'];
+    let urlsToTry = [];
+    if (org && org.links && Array.isArray(org.links)) {
+      for (const rel of linkRels) {
+        const link = org.links.find((l) => l.rel === rel);
+        if (link && link.uri) {
+          const u = link.uri.startsWith('http') ? link.uri : `${JD_API_URL.replace(/\/$/, '')}${link.uri.startsWith('/') ? link.uri : '/' + link.uri}`;
+          urlsToTry.push(u);
         }
       }
     }
+    // 2) Platform paths (same pattern as fields)
+    urlsToTry.push(
+      `${JD_API_URL}/organizations/${orgId}/machines`,
+      `${JD_API_URL}/organizations/${orgId}/assets`,
+      `${JD_API_URL}/organizations/${orgId}/equipment`
+    );
+    // 3) New Equipment API base (some apps use this)
+    const JD_EQUIPMENT_API = 'https://equipmentapi.deere.com/isg';
+    urlsToTry.push(`${JD_EQUIPMENT_API}/organizations/${orgId}/equipment`, `${JD_EQUIPMENT_API}/organizations/${orgId}/machines`);
 
-    // If no endpoint returned data, still report success with 0 added (user may have no JD equipment)
+    urlsToTry = [...new Set(urlsToTry)];
+
+    for (const startUrl of urlsToTry) {
+      let nextPageUrl = startUrl;
+      const seenIds = new Set();
+
+      while (nextPageUrl) {
+        try {
+          const response = await axios.get(nextPageUrl, { headers });
+          triedEndpoints.push(nextPageUrl);
+
+          const data = response.data;
+          const list = Array.isArray(data) ? data : (data.values || data.members || data.equipment || data.machines || (data._embedded && (data._embedded.machines || data._embedded.equipment)) || []);
+          const items = Array.isArray(list) ? list : [];
+
+          for (const item of items) {
+            const parsed = parseJDMachine(item);
+            if (!parsed || seenIds.has(parsed.jdId)) continue;
+            seenIds.add(parsed.jdId);
+            totalFetched++;
+
+            const existing = await db.query(
+              'SELECT id FROM equipment_assets WHERE jd_asset_id = $1 AND user_id = $2',
+              [parsed.jdId, userId]
+            );
+            if (existing.rows.length > 0) {
+              await db.query(
+                'UPDATE equipment_assets SET name = $1, make = $2, model = $3, year = $4, serial_number = $5, current_hours = COALESCE($6, current_hours), jd_raw_data = $7, updated_at = CURRENT_TIMESTAMP WHERE id = $8',
+                [parsed.name, parsed.make, parsed.model, parsed.year, parsed.serialNumber, parsed.hours, JSON.stringify(parsed.raw), existing.rows[0].id]
+              );
+              continue;
+            }
+
+            await db.query(
+              `INSERT INTO equipment_assets (
+                user_id, name, category, make, model, year, serial_number, current_hours, jd_asset_id, jd_raw_data
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+              [
+                userId,
+                parsed.name,
+                parsed.category,
+                parsed.make,
+                parsed.model,
+                parsed.year,
+                parsed.serialNumber,
+                parsed.hours,
+                parsed.jdId,
+                JSON.stringify(parsed.raw),
+              ]
+            );
+            assetsAdded++;
+          }
+
+          const nextLink = data.links && data.links.find((l) => l.rel === 'nextPage' || l.rel === 'next');
+          nextPageUrl = nextLink && nextLink.uri ? nextLink.uri : null;
+          if (items.length === 0 && !nextPageUrl) break;
+        } catch (err) {
+          if (err.response && err.response.status !== 404) {
+            console.error('JD equipment endpoint error:', nextPageUrl, err.response.status, err.response.data && JSON.stringify(err.response.data).slice(0, 200));
+          }
+          nextPageUrl = null;
+        }
+      }
+
+      if (totalFetched > 0) {
+        return res.json({
+          message: `Synced equipment from John Deere. ${assetsAdded} new asset(s) added, ${totalFetched} total from JD.`,
+          assetsAdded,
+          totalFetched,
+        });
+      }
+    }
+
+    // Fallback: add equipment from field operations (equipment_used from JD operations)
+    const fromOps = await syncEquipmentFromFieldOperations();
+    if (fromOps > 0) {
+      return res.json({
+        message: `No equipment list from John Deere machines API. Added ${fromOps} equipment from your field operations (from JD).`,
+        assetsAdded: fromOps,
+        totalFetched: 0,
+        fromFieldOperations: true,
+      });
+    }
+
     return res.json({
-      message: 'John Deere sync completed. No equipment found in Operations Center, or API format differs.',
+      message: 'John Deere sync completed. No equipment found. Sync field operations first (Fields module) so equipment names from JD can be added here.',
       assetsAdded: 0,
-      triedEndpoints,
+      totalFetched: 0,
+      triedEndpoints: [...new Set(triedEndpoints)],
     });
   } catch (error) {
     console.error('Equipment JD sync error:', error.response?.data || error.message);
@@ -209,6 +258,45 @@ router.post('/sync-hours/:assetId', async (req, res) => {
   } catch (error) {
     console.error('Sync hours error:', error);
     res.status(500).json({ error: 'Failed to sync hours' });
+  }
+});
+
+// Create equipment from field operations (equipment_used from JD operations) so list is populated even if machines API returns nothing
+async function syncEquipmentFromFieldOperations() {
+  const result = await db.query(
+    `SELECT DISTINCT equipment_used AS name FROM field_operations
+     WHERE user_id = $1 AND equipment_used IS NOT NULL AND TRIM(equipment_used) != ''`,
+    [userId]
+  );
+  let added = 0;
+  for (const row of result.rows || []) {
+    const name = (row.name || '').trim();
+    if (!name) continue;
+    const existing = await db.query(
+      'SELECT id FROM equipment_assets WHERE user_id = $1 AND (name = $2 OR name ILIKE $2)',
+      [userId, name]
+    );
+    if (existing.rows.length > 0) continue;
+    await db.query(
+      `INSERT INTO equipment_assets (user_id, name, category, notes) VALUES ($1, $2, 'tractor', $3)`,
+      [userId, name, 'Added from John Deere field operations']
+    );
+    added++;
+  }
+  return added;
+}
+
+// Sync equipment from John Deere: first try machines API, then add any equipment names from field operations
+router.post('/sync-from-operations', async (req, res) => {
+  try {
+    const added = await syncEquipmentFromFieldOperations();
+    res.json({
+      message: added > 0 ? `Added ${added} equipment from field operations.` : 'No new equipment names found in field operations.',
+      assetsAdded: added,
+    });
+  } catch (error) {
+    console.error('Sync from operations error:', error);
+    res.status(500).json({ error: 'Failed to sync equipment from operations' });
   }
 });
 

@@ -295,10 +295,22 @@ function EquipmentModule({ user, onLogout }) {
     try {
       const res = await axios.post(`${API_URL}/equipment-jd/sync`, {}, { headers: headers() });
       loadEquipment();
+      loadAlerts();
       alert(res.data.message || 'Sync complete.');
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.error || 'Failed to sync from John Deere.');
+    }
+  };
+
+  const handleSyncFromOperations = async () => {
+    try {
+      const res = await axios.post(`${API_URL}/equipment-jd/sync-from-operations`, {}, { headers: headers() });
+      loadEquipment();
+      alert(res.data.message || 'Done.');
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.error || 'Failed.');
     }
   };
 
@@ -361,9 +373,17 @@ function EquipmentModule({ user, onLogout }) {
           <>
             <div className="section-header">
               <h2>🚜 Equipment</h2>
-              <button className="add-button" onClick={() => setShowAddEquipment(true)}>
-                + Add Equipment
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <button className="action-btn jd-btn" onClick={handleSyncFromJD}>
+                  🚜 Sync from John Deere
+                </button>
+                <button className="action-btn" onClick={handleSyncFromOperations} title="Add equipment names from your synced field operations">
+                  📋 Add from field operations
+                </button>
+                <button className="add-button" onClick={() => setShowAddEquipment(true)}>
+                  + Add Equipment
+                </button>
+              </div>
             </div>
 
             {alerts.length > 0 && (
