@@ -5,6 +5,7 @@ const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
 const requireAdmin = require('../middleware/requireAdmin');
 const { ORG_USER_ID } = require('../config/org');
+const { getValidJohnDeereAccessToken } = require('../lib/johnDeereToken');
 
 router.use(authMiddleware);
 
@@ -31,16 +32,11 @@ router.post('/sync/:fieldName/:year', requireAdmin, async (req, res) => {
   try {
     const { fieldName, year } = req.params;
     
-    const tokenResult = await db.query(
-      'SELECT access_token FROM john_deere_tokens WHERE user_id = $1',
-      [ORG_USER_ID]
-    );
-    
-    if (tokenResult.rows.length === 0) {
-      return res.status(400).json({ error: 'John Deere not connected' });
+    const token = await getValidJohnDeereAccessToken(db, ORG_USER_ID);
+    if (token.error) {
+      return res.status(400).json({ error: token.error });
     }
-    
-    const accessToken = tokenResult.rows[0].access_token;
+    const accessToken = token.accessToken;
     
     // Get organization
     const orgsResponse = await axios.get(`${JD_API_URL}/organizations`, {

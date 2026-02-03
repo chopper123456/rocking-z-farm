@@ -6,6 +6,7 @@ const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
 const requireAdmin = require('../middleware/requireAdmin');
 const { ORG_USER_ID } = require('../config/org');
+const { getValidJohnDeereAccessToken } = require('../lib/johnDeereToken');
 
 router.use(authMiddleware);
 const JD_API_URL = 'https://sandboxapi.deere.com/platform';
@@ -161,14 +162,9 @@ async function updateActiveFromConnections(accessToken) {
 
 // Get John Deere access token and enabled org (shared org token)
 async function getJDAccess() {
-  const tokenResult = await db.query(
-    'SELECT access_token FROM john_deere_tokens WHERE user_id = $1',
-    [ORG_USER_ID]
-  );
-  if (tokenResult.rows.length === 0) {
-    return { error: 'John Deere not connected' };
-  }
-  const accessToken = tokenResult.rows[0].access_token;
+  const token = await getValidJohnDeereAccessToken(db, ORG_USER_ID);
+  if (token.error) return { error: token.error };
+  const accessToken = token.accessToken;
 
   const orgsResponse = await axios.get(`${JD_API_URL}/organizations`, {
     headers: {

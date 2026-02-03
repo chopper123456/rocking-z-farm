@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/auth');
 const requireAdmin = require('../middleware/requireAdmin');
 const { ORG_USER_ID } = require('../config/org');
 const db = require('../config/database');
+const { getValidJohnDeereAccessToken } = require('../lib/johnDeereToken');
 
 // John Deere API URLs
 const JD_AUTH_URL = 'https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/v1/authorize';
@@ -88,30 +89,29 @@ router.get('/callback', async (req, res) => {
     // Redirect back to frontend with success
     res.redirect('https://rocking-z-farm.vercel.app?jd_connected=true');
   } catch (error) {
-    console.error('OAuth error:', error.response?.data || error.message);
+    const data = error.response?.data || {};
+    const errCode = data.error;
+    console.error('OAuth error:', data.error_description || data.error || error.message);
+    if (errCode === 'invalid_grant') {
+      return res.redirect('https://rocking-z-farm.vercel.app?jd_error=code_expired');
+    }
     res.redirect('https://rocking-z-farm.vercel.app?jd_error=auth_failed');
   }
 });
 
-// Check connection status
+// Check connection status (uses refresh so "connected" reflects valid token)
 router.get('/status', authMiddleware, async (req, res) => {
   try {
+    const token = await getValidJohnDeereAccessToken(db, ORG_USER_ID);
+    if (token.error) {
+      return res.json({ connected: false, error: token.error });
+    }
     const result = await db.query(
       'SELECT expires_at FROM john_deere_tokens WHERE user_id = $1',
       [ORG_USER_ID]
     );
-    
-    if (result.rows.length === 0) {
-      return res.json({ connected: false });
-    }
-    
-    const expiresAt = new Date(result.rows[0].expires_at);
-    const isExpired = expiresAt < new Date();
-    
-    res.json({ 
-      connected: !isExpired,
-      expiresAt: expiresAt 
-    });
+    const expiresAt = result.rows.length ? new Date(result.rows[0].expires_at) : null;
+    res.json({ connected: true, expiresAt });
   } catch (error) {
     console.error('Status check error:', error);
     res.status(500).json({ error: 'Failed to check status' });
@@ -121,16 +121,11 @@ router.get('/status', authMiddleware, async (req, res) => {
 // Get connections URL
 router.get('/connections-url', authMiddleware, async (req, res) => {
   try {
-    const tokenResult = await db.query(
-      'SELECT access_token FROM john_deere_tokens WHERE user_id = $1',
-      [ORG_USER_ID]
-    );
-    
-    if (tokenResult.rows.length === 0) {
-      return res.status(400).json({ error: 'John Deere not connected' });
+    const token = await getValidJohnDeereAccessToken(db, ORG_USER_ID);
+    if (token.error) {
+      return res.status(400).json({ error: token.error });
     }
-    
-    const accessToken = tokenResult.rows[0].access_token;
+    const accessToken = token.accessToken;
     
     // Get organizations to find connections link
     const orgsResponse = await axios.get(`${JD_API_URL}/organizations`, {
@@ -170,16 +165,11 @@ router.get('/connections-url', authMiddleware, async (req, res) => {
 // Sync fields from John Deere (admin only)
 router.post('/sync/fields', authMiddleware, requireAdmin, async (req, res) => {
   try {
-    const tokenResult = await db.query(
-      'SELECT access_token FROM john_deere_tokens WHERE user_id = $1',
-      [ORG_USER_ID]
-    );
-    
-    if (tokenResult.rows.length === 0) {
-      return res.status(400).json({ error: 'John Deere not connected' });
+    const token = await getValidJohnDeereAccessToken(db, ORG_USER_ID);
+    if (token.error) {
+      return res.status(400).json({ error: token.error });
     }
-    
-    const accessToken = tokenResult.rows[0].access_token;
+    const accessToken = token.accessToken;
     
     // Get organizations - THIS is where we check for connections link
     console.log('Fetching organizations to check for connections link...');
