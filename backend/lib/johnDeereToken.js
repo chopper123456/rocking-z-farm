@@ -22,7 +22,9 @@ async function getValidJohnDeereAccessToken(db, orgUserId) {
   const { access_token, refresh_token, expires_at } = row.rows[0];
   const expiresAt = expires_at ? new Date(expires_at) : null;
   const now = new Date();
-  const needsRefresh = !expiresAt || expiresAt.getTime() - REFRESH_BUFFER_MS <= now.getTime();
+  // Refresh if: no expiry, or expired (or within 5 min of expiry), or expiry is in the past
+  const isExpired = !expiresAt || expiresAt.getTime() - REFRESH_BUFFER_MS <= now.getTime();
+  const needsRefresh = isExpired;
 
   if (!needsRefresh) {
     return { accessToken: access_token };
@@ -67,4 +69,9 @@ async function getValidJohnDeereAccessToken(db, orgUserId) {
   }
 }
 
-module.exports = { getValidJohnDeereAccessToken };
+/** Clear stored John Deere tokens for org (e.g. after 401 expired from JD API). */
+async function clearJohnDeereTokens(db, orgUserId) {
+  await db.query('DELETE FROM john_deere_tokens WHERE user_id = $1', [orgUserId]);
+}
+
+module.exports = { getValidJohnDeereAccessToken, clearJohnDeereTokens };

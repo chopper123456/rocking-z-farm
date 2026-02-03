@@ -6,7 +6,7 @@ const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
 const requireAdmin = require('../middleware/requireAdmin');
 const { ORG_USER_ID } = require('../config/org');
-const { getValidJohnDeereAccessToken } = require('../lib/johnDeereToken');
+const { getValidJohnDeereAccessToken, clearJohnDeereTokens } = require('../lib/johnDeereToken');
 
 router.use(authMiddleware);
 const JD_API_URL = 'https://sandboxapi.deere.com/platform';
@@ -434,6 +434,15 @@ router.post('/sync', requireAdmin, async (req, res) => {
       triedEndpoints: [...new Set(triedEndpoints)],
     });
   } catch (error) {
+    const status = error.response?.status;
+    const msg = (error.response?.data?.message || error.response?.data || error.message || '').toString();
+    const isExpired = status === 401 && (msg.includes('expired') || msg.includes('JWT'));
+    if (isExpired) {
+      await clearJohnDeereTokens(db, ORG_USER_ID);
+      return res.status(400).json({
+        error: 'John Deere session expired. Please reconnect in John Deere settings.',
+      });
+    }
     console.error('Equipment JD sync error:', error.response?.data || error.message);
     res.status(500).json({
       error: 'Failed to sync equipment from John Deere',
