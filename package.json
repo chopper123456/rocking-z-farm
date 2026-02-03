@@ -1,0 +1,9 @@
+{
+  "name": "rocking-z-farm",
+  "private": true,
+  "description": "Rocking Z Farm – monorepo root for Vercel",
+  "scripts": {
+    "build": "cd frontend && npm run build",
+    "install": "cd frontend && npm install"
+  }
+}
