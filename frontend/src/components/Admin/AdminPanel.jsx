@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../Layout/Header';
 import axios from 'axios';
+import { API_URL } from '../../utils/api';
 import './AdminPanel.css';
 
 function AdminPanel({ user, onLogout }) {
@@ -19,8 +20,6 @@ function AdminPanel({ user, onLogout }) {
     fullName: '',
     role: 'team',
   });
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     // Check if user is admin

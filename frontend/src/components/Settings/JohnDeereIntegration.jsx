@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../Layout/Header';
-import api from '../../utils/api';
+import api, { API_URL } from '../../utils/api';
 import './JohnDeereIntegration.css';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 function getStoredToken() {
   return localStorage.getItem('token') || sessionStorage.getItem('token');

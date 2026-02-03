@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Backend mounts all routes under /api — ensure base URL ends with /api
+const raw = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/+$/, '');
+const API_URL = raw.endsWith('/api') ? raw : `${raw}/api`;
 
 const api = axios.create({
   baseURL: API_URL,
@@ -8,6 +10,8 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+export { API_URL };
 
 function getStoredToken() {
   return localStorage.getItem('token') || sessionStorage.getItem('token');

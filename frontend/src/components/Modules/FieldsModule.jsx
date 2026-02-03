@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../Layout/Header';
 import axios from 'axios';
-import { fieldsAPI, fieldsJDAPI } from '../../utils/api';
+import { fieldsAPI, fieldsJDAPI, API_URL } from '../../utils/api';
 import './FieldsModule.css';
 
 function FieldsModule({ user, onLogout }) {
@@ -76,8 +76,6 @@ function FieldsModule({ user, onLogout }) {
     expectedYield: '',
     notes: ''
   });
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     // Auto-sync fields from John Deere on page load (silent background sync)
