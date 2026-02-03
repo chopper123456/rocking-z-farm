@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../Layout/Header';
-import axios from 'axios';
+import api from '../../utils/api';
 import './JohnDeereIntegration.css';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+function getStoredToken() {
+  return localStorage.getItem('token') || sessionStorage.getItem('token');
+}
 
 function JohnDeereIntegration({ user, onLogout }) {
   const navigate = useNavigate();
@@ -11,8 +17,6 @@ function JohnDeereIntegration({ user, onLogout }) {
   const [jdLoading, setJdLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     checkJohnDeereStatus();
@@ -30,10 +34,7 @@ function JohnDeereIntegration({ user, onLogout }) {
   const checkJohnDeereStatus = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/john-deere/status`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/john-deere/status');
       setJdConnected(response.data.connected);
     } catch (error) {
       console.error('Error checking JD status:', error);
@@ -45,7 +46,7 @@ function JohnDeereIntegration({ user, onLogout }) {
 
   const handleConnectJohnDeere = () => {
     setJdLoading(true);
-    const token = localStorage.getItem('token');
+    const token = getStoredToken();
     window.location.href = `${API_URL}/john-deere/connect?token=${token}`;
   };
 
@@ -56,10 +57,7 @@ function JohnDeereIntegration({ user, onLogout }) {
 
     setSyncing(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(`${API_URL}/john-deere/sync/fields`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.post('/john-deere/sync/fields', {});
       
       alert(`✅ ${response.data.message}\n\nFields added: ${response.data.fieldsAdded}\nTotal fields found: ${response.data.totalFields}`);
       
@@ -68,7 +66,7 @@ function JohnDeereIntegration({ user, onLogout }) {
       }
     } catch (error) {
       console.error('Sync error:', error);
-      
+      if (error.response?.status === 401) return; // api interceptor handles redirect to login
       if (error.response?.data?.connectionsUrl) {
         const connectionsUrl = error.response.data.connectionsUrl;
         const message = error.response.data.message || 'You need to enable organization access';
@@ -90,10 +88,7 @@ function JohnDeereIntegration({ user, onLogout }) {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`${API_URL}/john-deere/disconnect`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.delete('/john-deere/disconnect');
       setJdConnected(false);
       alert('✅ Disconnected from John Deere');
     } catch (error) {
