@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../Layout/Header';
 import axios from 'axios';
 import { fieldsAPI, fieldsJDAPI, API_URL } from '../../utils/api';
-import { useOffline } from '../../contexts/OfflineContext';
-import { setCachedFields } from '../../utils/offlineDB';
 import CameraCapture from '../Camera/CameraCapture';
 import { SkeletonFieldList } from '../ui/LoadingSkeleton';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
@@ -12,7 +10,6 @@ import './FieldsModule.css';
 
 function FieldsModule({ user, onLogout }) {
   const navigate = useNavigate();
-  const { isOnline, getCachedFields, cacheFields, queueScoutingReport } = useOffline();
   const [fields, setFields] = useState([]);
   const [selectedField, setSelectedField] = useState(null);
   const [selectedYear, setSelectedYear] = useState(null);
@@ -104,26 +101,15 @@ function FieldsModule({ user, onLogout }) {
   const loadFields = useCallback(async () => {
     try {
       setLoading(true);
-      if (!navigator.onLine) {
-        const cached = await getCachedFields();
-        setFields(cached || []);
-        return;
-      }
       const response = await fieldsAPI.getAll({ onMapOnly: onMapOnly });
       setFields(response.data || []);
-      await setCachedFields(response.data || []);
     } catch (error) {
       console.error('Error loading fields:', error);
-      if (!navigator.onLine) {
-        const cached = await getCachedFields();
-        setFields(cached || []);
-      } else {
-        alert('Failed to load fields');
-      }
+      alert('Failed to load fields');
     } finally {
       setLoading(false);
     }
-  }, [onMapOnly, getCachedFields]);
+  }, [onMapOnly]);
 
   const loadYears = async (fieldName) => {
     try {
@@ -496,36 +482,6 @@ function FieldsModule({ user, onLogout }) {
       : scoutingNote.photo
         ? { blob: scoutingNote.photo, name: scoutingNote.photo.name || 'photo.jpg' }
         : null;
-
-    if (!navigator.onLine && photoToUse?.blob) {
-      await queueScoutingReport({
-        fieldName: selectedField.field_name,
-        year: selectedYear,
-        reportDate: scoutingNote.reportDate,
-        growthStage: scoutingNote.growthStage,
-        pestPressure: scoutingNote.pestPressure,
-        weedPressure: scoutingNote.weedPressure,
-        diseaseNotes: scoutingNote.diseaseNotes,
-        generalNotes: scoutingNote.generalNotes,
-        weatherConditions: scoutingNote.weatherConditions,
-        photoBlob: photoToUse.blob,
-        photoName: photoToUse.name
-      });
-      setShowAddScouting(false);
-      setScoutingNote({
-        reportDate: new Date().toISOString().split('T')[0],
-        growthStage: '',
-        pestPressure: 'Low',
-        weedPressure: 'Low',
-        diseaseNotes: '',
-        generalNotes: '',
-        weatherConditions: '',
-        photo: null,
-        capturedPhotos: []
-      });
-      alert('Saved offline. Will sync when you\'re back online.');
-      return;
-    }
 
     try {
       const token = localStorage.getItem('token');

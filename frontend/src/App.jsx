@@ -10,7 +10,6 @@ import EquipmentModule from './components/Modules/EquipmentModule';
 import GrainModule from './components/Modules/GrainModule';
 import InventoryModule from './components/Modules/InventoryModule';
 import InstallPrompt from './components/PWA/InstallPrompt';
-import OfflineIndicator from './components/PWA/OfflineIndicator';
 import BottomNav from './components/Layout/BottomNav';
 import './components/PWA/PWA.css';
 
@@ -78,7 +77,6 @@ function App() {
     <Router>
       {isAuthenticated && (
         <>
-          <OfflineIndicator />
           <InstallPrompt />
           <BottomNav />
         </>
