@@ -12,14 +12,24 @@ const JD_AUTH_URL = 'https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/v1
 const JD_TOKEN_URL = 'https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/v1/token';
 const JD_API_URL = 'https://sandboxapi.deere.com/platform';
 
-// Initiate OAuth flow - Connect to John Deere (admin only; token stored for org)
-router.get('/connect', authMiddleware, requireAdmin, async (req, res) => {
+// Initiate OAuth flow - Connect to John Deere (admin only; token in query when opened via redirect)
+router.get('/connect', (req, res, next) => {
+  const token = req.query.token || req.header('Authorization')?.replace('Bearer ', '');
+  if (!token) {
+    return res.status(401).json({ error: 'No authentication token, access denied' });
+  }
   try {
-    const token = req.query.token || req.header('Authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ error: 'No authentication token provided' });
+    const decoded = require('jsonwebtoken').verify(token, process.env.JWT_SECRET);
+    if (!decoded.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
     }
-    require('jsonwebtoken').verify(token, process.env.JWT_SECRET);
+    req.user = { userId: decoded.userId, username: decoded.username, isAdmin: true };
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Token is not valid' });
+  }
+}, async (req, res) => {
+  try {
     const authUrl = `${JD_AUTH_URL}?` +
       `client_id=${process.env.JOHN_DEERE_CLIENT_ID}` +
       `&response_type=code` +
@@ -29,7 +39,7 @@ router.get('/connect', authMiddleware, requireAdmin, async (req, res) => {
     res.redirect(authUrl);
   } catch (error) {
     console.error('Connect error:', error);
-    res.status(401).json({ error: 'Invalid token' });
+    res.status(500).json({ error: 'Failed to start John Deere connection' });
   }
 });
 
