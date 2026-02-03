@@ -38,6 +38,8 @@ function EquipmentModule({ user, onLogout }) {
   const [jdHoursOfOperation, setJdHoursOfOperation] = useState(null);
   const [jdMachineAlerts, setJdMachineAlerts] = useState(null);
   const [jdDataLoading, setJdDataLoading] = useState(false);
+  const [equipmentTab, setEquipmentTab] = useState('all');
+  const [moveMenuAssetId, setMoveMenuAssetId] = useState(null);
 
   const [showAddEquipment, setShowAddEquipment] = useState(false);
   const [showEditEquipment, setShowEditEquipment] = useState(false);
@@ -377,6 +379,44 @@ function EquipmentModule({ user, onLogout }) {
     window.open(`${API_URL}/equipment/${selectedAsset.id}/maintenance/${maintId}/receipt`, '_blank');
   };
 
+  const handleMoveToCategory = async (assetId, newCategory, e) => {
+    e?.stopPropagation();
+    setMoveMenuAssetId(null);
+    try {
+      const asset = equipment.find((a) => a.id === assetId);
+      if (!asset) return;
+      await axios.put(
+        `${API_URL}/equipment/${assetId}`,
+        {
+          name: asset.name,
+          category: newCategory,
+          make: asset.make,
+          model: asset.model,
+          year: asset.year,
+          serialNumber: asset.serial_number,
+          currentHours: asset.current_hours,
+          currentMiles: asset.current_miles,
+          purchaseDate: asset.purchase_date?.split('T')[0],
+          purchaseCost: asset.purchase_cost,
+          insurancePolicy: asset.insurance_policy,
+          insuranceExpires: asset.insurance_expires?.split('T')[0],
+          registrationNumber: asset.registration_number,
+          registrationExpires: asset.registration_expires?.split('T')[0],
+          notes: asset.notes,
+        },
+        { headers: headers() }
+      );
+      await loadEquipment();
+      if (selectedAsset?.id === assetId) {
+        const res = await axios.get(`${API_URL}/equipment/${assetId}`, { headers: headers() });
+        setSelectedAsset(res.data);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to move equipment.');
+    }
+  };
+
   const filteredEquipment = equipment.filter(
     (e) =>
       e.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -384,17 +424,24 @@ function EquipmentModule({ user, onLogout }) {
       e.model?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Group by category for sectioned list: Tractors, Combines, Sprayers, Implements, Other (only if has items)
+  // Tab filter: which list to show
   const SECTION_ORDER = ['tractor', 'combine', 'sprayer', 'implement'];
   const otherItems = filteredEquipment.filter((e) => !SECTION_ORDER.includes((e.category || '').toLowerCase()));
-  const equipmentByCategory = [
+  const equipmentListForTab =
+    equipmentTab === 'all'
+      ? filteredEquipment
+      : equipmentTab === 'other'
+        ? otherItems
+        : filteredEquipment.filter((e) => (e.category || '').toLowerCase() === equipmentTab);
+
+  const EQUIPMENT_TABS = [
+    { id: 'all', label: 'All', icon: '🚜' },
     ...SECTION_ORDER.map((cat) => ({
-      category: cat,
-      label: CATEGORIES.find((c) => c.value === cat)?.label || cat,
+      id: cat,
+      label: CATEGORIES.find((c) => c.value === cat)?.label + 's' || cat + 's',
       icon: { tractor: '🚜', combine: '🌾', sprayer: '💨', implement: '🔧' }[cat] || '📦',
-      items: filteredEquipment.filter((e) => (e.category || '').toLowerCase() === cat),
     })),
-    ...(otherItems.length > 0 ? [{ category: 'other', label: 'Other', icon: '📦', items: otherItems }] : []),
+    ...(otherItems.length > 0 ? [{ id: 'other', label: 'Other', icon: '📦' }] : []),
   ];
 
   const timelineItems = maintenance
@@ -486,38 +533,92 @@ function EquipmentModule({ user, onLogout }) {
                 )}
               </div>
             ) : (
-              <div className="equipment-list-by-category">
-                {equipmentByCategory.map((section) => (
-                  <div key={section.category} className="equipment-category-section">
-                    <h3 className="equipment-category-heading">
-                      <span className="equipment-category-icon">{section.icon}</span>
-                      {section.category === 'other' ? section.label : `${section.label}s`}
-                      {section.items.length > 0 && (
-                        <span className="equipment-category-count">({section.items.length})</span>
-                      )}
-                    </h3>
-                    {section.items.length === 0 ? (
-                      <p className="equipment-category-empty">
-                        {section.category === 'other' ? 'No other equipment' : `No ${section.label.toLowerCase()}s`}
-                      </p>
-                    ) : (
-                      <div className="equipment-list">
-                        {section.items.map((asset) => (
-                          <div key={asset.id} className="equipment-card" onClick={() => handleEquipmentClick(asset)}>
-                            <h3>{asset.name}</h3>
-                            <div className="equipment-meta">
-                              {asset.make && asset.model && <span>{asset.make} {asset.model}</span>}
-                              {asset.year && <span>Year: {asset.year}</span>}
-                              {(asset.current_hours != null && asset.current_hours > 0) && <span>{Number(asset.current_hours).toLocaleString()} hrs</span>}
-                              {asset.jd_asset_id && <span style={{ color: 'var(--earth-mid)' }}>John Deere</span>}
+              <>
+                <div className="equipment-tabs">
+                  {EQUIPMENT_TABS.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      className={`equipment-tab ${equipmentTab === tab.id ? 'active' : ''}`}
+                      onClick={() => setEquipmentTab(tab.id)}
+                    >
+                      <span className="equipment-tab-icon">{tab.icon}</span>
+                      <span>{tab.label}</span>
+                      <span className="equipment-tab-count">
+                        ({tab.id === 'all'
+                          ? filteredEquipment.length
+                          : tab.id === 'other'
+                            ? otherItems.length
+                            : filteredEquipment.filter((e) => (e.category || '').toLowerCase() === tab.id).length})
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {equipmentListForTab.length === 0 ? (
+                  <div className="equipment-tab-empty">
+                    <p>No {equipmentTab === 'all' ? 'equipment' : equipmentTab === 'other' ? 'other equipment' : equipmentTab + 's'} in this view.</p>
+                    <button type="button" className="add-button" style={{ marginTop: '0.5rem' }} onClick={() => setEquipmentTab('all')}>
+                      View all
+                    </button>
+                  </div>
+                ) : (
+                  <div className="equipment-list">
+                    {equipmentListForTab.map((asset) => (
+                      <div
+                        key={asset.id}
+                        className="equipment-card"
+                        onClick={() => handleEquipmentClick(asset)}
+                      >
+                        <div className="equipment-card-header">
+                          <h3>{asset.name}</h3>
+                          <div className="equipment-card-actions">
+                            <div className="move-to-wrapper">
+                              <button
+                                type="button"
+                                className="move-to-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMoveMenuAssetId(moveMenuAssetId === asset.id ? null : asset.id);
+                                }}
+                                title="Move to category"
+                              >
+                                ⋮ Move to
+                              </button>
+                              {moveMenuAssetId === asset.id && (
+                                <>
+                                  <div
+                                    className="move-to-backdrop"
+                                    onClick={(e) => { e.stopPropagation(); setMoveMenuAssetId(null); }}
+                                    aria-hidden
+                                  />
+                                  <div className="move-to-menu">
+                                    {CATEGORIES.filter((c) => c.value !== (asset.category || '').toLowerCase()).map((c) => (
+                                      <button
+                                        key={c.value}
+                                        type="button"
+                                        className="move-to-item"
+                                        onClick={(e) => handleMoveToCategory(asset.id, c.value, e)}
+                                      >
+                                        Move to {c.label}s
+                                      </button>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
                             </div>
                           </div>
-                        ))}
+                        </div>
+                        <div className="equipment-meta">
+                          {asset.make && asset.model && <span>{asset.make} {asset.model}</span>}
+                          {asset.year && <span>Year: {asset.year}</span>}
+                          {(asset.current_hours != null && asset.current_hours > 0) && <span>{Number(asset.current_hours).toLocaleString()} hrs</span>}
+                          {asset.jd_asset_id && <span style={{ color: 'var(--earth-mid)' }}>John Deere</span>}
+                        </div>
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </>
         )}
@@ -545,6 +646,19 @@ function EquipmentModule({ user, onLogout }) {
                 {selectedAsset.current_hours != null && selectedAsset.current_hours > 0 && ` • ${Number(selectedAsset.current_hours).toLocaleString()} hrs`}
                 {selectedAsset.jd_asset_id && ' • John Deere'}
               </p>
+              <div className="equipment-detail-category">
+                <label>
+                  Category:{' '}
+                  <select
+                    value={(selectedAsset.category || 'tractor').toLowerCase()}
+                    onChange={(e) => handleMoveToCategory(selectedAsset.id, e.target.value)}
+                  >
+                    {CATEGORIES.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </div>
 
             <div className="action-buttons-grid">

@@ -125,52 +125,65 @@
   box-shadow: 0 0 0 3px rgba(135, 169, 107, 0.1);
 }
 
-/* Equipment list by category (Tractors, Combines, Sprayers, Implements) */
-.equipment-list-by-category {
+/* Equipment category tabs */
+.equipment-module .equipment-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.equipment-module .equipment-category-section {
-  border-bottom: 1px solid #e8e8e8;
-  padding-bottom: 1.5rem;
-}
-
-.equipment-module .equipment-category-section:last-child {
-  border-bottom: none;
-}
-
-.equipment-module .equipment-category-heading {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 1.4rem;
-  color: var(--earth-dark);
-  letter-spacing: 1px;
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 0.75rem;
 }
 
-.equipment-module .equipment-category-icon {
-  font-size: 1.5rem;
+.equipment-module .equipment-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  background: #fff;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.1rem;
+  letter-spacing: 0.5px;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.equipment-module .equipment-category-count {
-  font-size: 1rem;
-  font-weight: normal;
+.equipment-module .equipment-tab:hover {
+  border-color: var(--earth-light);
+  color: var(--earth-dark);
+  background: #f8faf8;
+}
+
+.equipment-module .equipment-tab.active {
+  border-color: var(--earth-mid);
+  background: linear-gradient(135deg, var(--earth-mid), var(--earth-dark));
+  color: var(--white);
+}
+
+.equipment-module .equipment-tab-icon {
+  font-size: 1.2rem;
+}
+
+.equipment-module .equipment-tab-count {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  margin-left: 0.15rem;
+}
+
+.equipment-module .equipment-tab-empty {
+  text-align: center;
+  padding: 2rem;
   color: #666;
-  margin-left: 0.25rem;
 }
 
-.equipment-module .equipment-category-empty {
-  color: #888;
-  font-size: 0.95rem;
-  margin: 0;
-  padding-left: 2rem;
+.equipment-module .equipment-tab-empty p {
+  margin: 0 0 0.5rem 0;
 }
 
-/* Equipment list grid (within each category) */
+/* Equipment list grid */
 .equipment-module .equipment-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -184,6 +197,7 @@
   box-shadow: 0 2px 15px var(--shadow);
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .equipment-card:hover {
@@ -191,11 +205,85 @@
   box-shadow: 0 6px 25px rgba(0, 0, 0, 0.15);
 }
 
+.equipment-card .equipment-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.equipment-card .equipment-card-header h3 {
+  flex: 1;
+  margin: 0;
+}
+
+.equipment-card .equipment-card-actions {
+  flex-shrink: 0;
+}
+
+.equipment-card .move-to-wrapper {
+  position: relative;
+}
+
+.equipment-card .move-to-btn {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #f8f8f8;
+  font-size: 0.8rem;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.equipment-card .move-to-btn:hover {
+  background: #eee;
+  border-color: var(--earth-light);
+  color: var(--earth-dark);
+}
+
+.equipment-card .move-to-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.equipment-card .move-to-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.25rem;
+  background: var(--white);
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+  padding: 0.35rem 0;
+  z-index: 20;
+  min-width: 160px;
+}
+
+.equipment-card .move-to-item {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  border: none;
+  background: none;
+  font-size: 0.9rem;
+  color: #333;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.equipment-card .move-to-item:hover {
+  background: #f0f7f0;
+}
+
 .equipment-card h3 {
   font-family: 'Bebas Neue', sans-serif;
   font-size: 1.5rem;
   color: var(--earth-dark);
-  margin-bottom: 0.5rem;
   letter-spacing: 0.5px;
 }
 
@@ -205,17 +293,6 @@
   gap: 0.5rem;
   color: #666;
   font-size: 0.95rem;
-}
-
-.equipment-card .category-badge {
-  display: inline-block;
-  background: #e8f5e9;
-  color: var(--earth-dark);
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  margin-top: 0.5rem;
 }
 
 /* Detail header */
@@ -237,6 +314,28 @@
 .equipment-detail-header p {
   opacity: 0.9;
   font-size: 1.05rem;
+}
+
+.equipment-detail-header .equipment-detail-category {
+  margin-top: 0.75rem;
+}
+
+.equipment-detail-header .equipment-detail-category label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  opacity: 0.95;
+}
+
+.equipment-detail-header .equipment-detail-category select {
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.4);
+  background: rgba(255,255,255,0.95);
+  color: #333;
+  font-size: 0.9rem;
+  cursor: pointer;
 }
 
 /* Overview card */
