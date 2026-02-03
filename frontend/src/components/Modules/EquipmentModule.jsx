@@ -384,6 +384,19 @@ function EquipmentModule({ user, onLogout }) {
       e.model?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Group by category for sectioned list: Tractors, Combines, Sprayers, Implements, Other (only if has items)
+  const SECTION_ORDER = ['tractor', 'combine', 'sprayer', 'implement'];
+  const otherItems = filteredEquipment.filter((e) => !SECTION_ORDER.includes((e.category || '').toLowerCase()));
+  const equipmentByCategory = [
+    ...SECTION_ORDER.map((cat) => ({
+      category: cat,
+      label: CATEGORIES.find((c) => c.value === cat)?.label || cat,
+      icon: { tractor: '🚜', combine: '🌾', sprayer: '💨', implement: '🔧' }[cat] || '📦',
+      items: filteredEquipment.filter((e) => (e.category || '').toLowerCase() === cat),
+    })),
+    ...(otherItems.length > 0 ? [{ category: 'other', label: 'Other', icon: '📦', items: otherItems }] : []),
+  ];
+
   const timelineItems = maintenance
     .map((m) => ({
       date: new Date(m.service_date),
@@ -473,17 +486,35 @@ function EquipmentModule({ user, onLogout }) {
                 )}
               </div>
             ) : (
-              <div className="equipment-list">
-                {filteredEquipment.map((asset) => (
-                  <div key={asset.id} className="equipment-card" onClick={() => handleEquipmentClick(asset)}>
-                    <h3>{asset.name}</h3>
-                    <div className="equipment-meta">
-                      {asset.make && asset.model && <span>{asset.make} {asset.model}</span>}
-                      {asset.year && <span>Year: {asset.year}</span>}
-                      {(asset.current_hours != null && asset.current_hours > 0) && <span>{Number(asset.current_hours).toLocaleString()} hrs</span>}
-                      {asset.jd_asset_id && <span style={{ color: 'var(--earth-mid)' }}>John Deere</span>}
-                    </div>
-                    <span className="category-badge">{CATEGORIES.find((c) => c.value === asset.category)?.label || asset.category}</span>
+              <div className="equipment-list-by-category">
+                {equipmentByCategory.map((section) => (
+                  <div key={section.category} className="equipment-category-section">
+                    <h3 className="equipment-category-heading">
+                      <span className="equipment-category-icon">{section.icon}</span>
+                      {section.category === 'other' ? section.label : `${section.label}s`}
+                      {section.items.length > 0 && (
+                        <span className="equipment-category-count">({section.items.length})</span>
+                      )}
+                    </h3>
+                    {section.items.length === 0 ? (
+                      <p className="equipment-category-empty">
+                        {section.category === 'other' ? 'No other equipment' : `No ${section.label.toLowerCase()}s`}
+                      </p>
+                    ) : (
+                      <div className="equipment-list">
+                        {section.items.map((asset) => (
+                          <div key={asset.id} className="equipment-card" onClick={() => handleEquipmentClick(asset)}>
+                            <h3>{asset.name}</h3>
+                            <div className="equipment-meta">
+                              {asset.make && asset.model && <span>{asset.make} {asset.model}</span>}
+                              {asset.year && <span>Year: {asset.year}</span>}
+                              {(asset.current_hours != null && asset.current_hours > 0) && <span>{Number(asset.current_hours).toLocaleString()} hrs</span>}
+                              {asset.jd_asset_id && <span style={{ color: 'var(--earth-mid)' }}>John Deere</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -125,11 +125,56 @@
   box-shadow: 0 0 0 3px rgba(135, 169, 107, 0.1);
 }
 
-/* Equipment list grid */
-.equipment-list {
+/* Equipment list by category (Tractors, Combines, Sprayers, Implements) */
+.equipment-list-by-category {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.equipment-module .equipment-category-section {
+  border-bottom: 1px solid #e8e8e8;
+  padding-bottom: 1.5rem;
+}
+
+.equipment-module .equipment-category-section:last-child {
+  border-bottom: none;
+}
+
+.equipment-module .equipment-category-heading {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.4rem;
+  color: var(--earth-dark);
+  letter-spacing: 1px;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.equipment-module .equipment-category-icon {
+  font-size: 1.5rem;
+}
+
+.equipment-module .equipment-category-count {
+  font-size: 1rem;
+  font-weight: normal;
+  color: #666;
+  margin-left: 0.25rem;
+}
+
+.equipment-module .equipment-category-empty {
+  color: #888;
+  font-size: 0.95rem;
+  margin: 0;
+  padding-left: 2rem;
+}
+
+/* Equipment list grid (within each category) */
+.equipment-module .equipment-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
 }
 
 .equipment-card {
