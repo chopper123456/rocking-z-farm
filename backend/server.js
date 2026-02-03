@@ -110,9 +110,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Run equipment migration on startup (creates tables if missing - safe for Railway)
+// Run migrations on startup (safe for Railway - ADD COLUMN IF NOT EXISTS, CREATE TABLE IF NOT EXISTS)
 const db = require('./config/database');
 const { runEquipmentMigration } = require('./lib/equipmentMigration');
+const { runUsersTableMigration } = require('./lib/usersTableMigration');
 
 async function start() {
   try {
@@ -121,6 +122,13 @@ async function start() {
   } catch (err) {
     console.error('Equipment migration failed:', err.message);
     // Still start server so Fields and other modules work
+  }
+  try {
+    await runUsersTableMigration(db);
+    console.log('✓ Users table (full_name, activity_log) ready');
+  } catch (err) {
+    console.error('Users table migration failed:', err.message);
+    // Still start server
   }
   app.listen(PORT, () => {
     console.log(`
