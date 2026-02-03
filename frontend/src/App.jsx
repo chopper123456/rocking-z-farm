@@ -9,6 +9,7 @@ import FieldsModule from './components/Modules/FieldsModule';
 import EquipmentModule from './components/Modules/EquipmentModule';
 import GrainModule from './components/Modules/GrainModule';
 import InventoryModule from './components/Modules/InventoryModule';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import InstallPrompt from './components/PWA/InstallPrompt';
 import BottomNav from './components/Layout/BottomNav';
 import './components/PWA/PWA.css';
@@ -75,6 +76,7 @@ function App() {
 
   return (
     <Router>
+      <SpeedInsights />
       {isAuthenticated && (
         <>
           <InstallPrompt />
