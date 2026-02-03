@@ -87,6 +87,7 @@ export const equipmentAPI = {
 // Equipment John Deere sync & reports
 export const equipmentJDAPI = {
   sync: () => api.post('/equipment-jd/sync'),
+  refreshOnMap: () => api.post('/equipment-jd/refresh-on-map'),
   syncHours: (assetId) => api.post(`/equipment-jd/sync-hours/${assetId}`),
   connections: () => api.get('/equipment-jd/connections'),
   fieldUsage: () => api.get('/equipment-jd/field-usage'),

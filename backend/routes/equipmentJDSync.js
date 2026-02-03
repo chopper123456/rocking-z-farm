@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const { XMLParser } = require('fast-xml-parser');
 const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
 
@@ -8,8 +9,125 @@ router.use(authMiddleware);
 
 const userId = 1;
 const JD_API_URL = 'https://sandboxapi.deere.com/platform';
+// ISO 15143-3 (AEMP 2.0) Fleet API - returns only machines with telematic state "active" (on the map)
+const AEMP_BASE_URL = process.env.JD_AEMP_URL || 'https://sandboxaemp.deere.com';
 
-// Fetch connected machine/asset IDs from JD Connections API and update equipment_assets.is_active
+const xmlParser = new XMLParser({ ignoreAttributes: false });
+
+// Recursively collect SerialNumber, EquipmentId, Id from parsed AEMP XML
+function collectEquipmentIdsFromParsed(obj, ids, serials) {
+  if (!obj || typeof obj !== 'object') return;
+  if (obj.SerialNumber != null && String(obj.SerialNumber).trim()) serials.add(String(obj.SerialNumber).trim());
+  if (obj.EquipmentId != null && String(obj.EquipmentId).trim()) ids.add(String(obj.EquipmentId).trim());
+  if (obj.Id != null && String(obj.Id).trim()) ids.add(String(obj.Id).trim());
+  if (obj.PIN != null && String(obj.PIN).trim()) ids.add(String(obj.PIN).trim());
+  if (obj['@_id'] != null) ids.add(String(obj['@_id']));
+  for (const key of Object.keys(obj)) {
+    const v = obj[key];
+    if (Array.isArray(v)) v.forEach((item) => collectEquipmentIdsFromParsed(item, ids, serials));
+    else if (v && typeof v === 'object') collectEquipmentIdsFromParsed(v, ids, serials);
+  }
+}
+
+// Extract Links (next, connections) from parsed Fleet XML (ISO 15143-3)
+function getLinksFromParsed(obj) {
+  const links = { next: null, connections: null };
+  function walk(o) {
+    if (!o || typeof o !== 'object') return;
+    if (o.Links) {
+      const arr = Array.isArray(o.Links) ? o.Links : [o.Links];
+      for (const link of arr) {
+        let rel = link.rel ?? link.Rel;
+        if (Array.isArray(rel)) rel = rel[0];
+        if (typeof rel === 'object' && rel != null) rel = rel['#text'] ?? rel[0];
+        let href = link.href ?? link.Href ?? link['@_href'];
+        if (Array.isArray(href)) href = href[0];
+        if (typeof href === 'object' && href != null) href = href['#text'] ?? href[0];
+        if (rel === 'next' && href) links.next = String(href).trim();
+        if (rel === 'connections' && href) links.connections = String(href).trim();
+      }
+    }
+    for (const k of Object.keys(o)) {
+      if (o[k] && typeof o[k] === 'object') walk(o[k]);
+    }
+  }
+  walk(obj);
+  return links;
+}
+
+// Fetch active (on-map) machine IDs from AEMP Fleet API (ISO 15143-3)
+async function getActiveMachineIdsFromAEMP(accessToken) {
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: 'application/xml',
+    'Accept-Encoding': 'gzip',
+  };
+  const ids = new Set();
+  const serials = new Set();
+  let nextUrl = `${AEMP_BASE_URL}/Fleet/1`;
+  let connectionsUrl = null;
+
+  while (nextUrl) {
+    try {
+      const res = await axios.get(nextUrl, { headers, responseType: 'text', maxRedirects: 5 });
+      const xml = typeof res.data === 'string' ? res.data : '';
+      const parsed = xmlParser.parse(xml);
+      const links = getLinksFromParsed(parsed);
+      if (links.connections) connectionsUrl = links.connections;
+      collectEquipmentIdsFromParsed(parsed, ids, serials);
+      nextUrl = links.next || null;
+    } catch (err) {
+      if (err.response?.status === 403) {
+        return { error: 'AEMP access forbidden. Enable organization access in Operations Center.', connectionsUrl: connectionsUrl || null };
+      }
+      if (err.response?.status === 401) {
+        return { error: 'AEMP token invalid or expired.', connectionsUrl: null };
+      }
+      console.error('AEMP Fleet request error:', nextUrl, err.response?.status, err.message);
+      nextUrl = null;
+    }
+  }
+
+  return {
+    activeIds: [...ids],
+    activeSerials: [...serials],
+    connectionsUrl: connectionsUrl || null,
+  };
+}
+
+// Update equipment_assets.is_active from AEMP Fleet (machines "on the map")
+async function updateActiveFromAEMP(accessToken) {
+  const aemp = await getActiveMachineIdsFromAEMP(accessToken);
+  if (aemp.error) {
+    console.warn('AEMP Fleet:', aemp.error);
+    return { warning: aemp.error, connectionsUrl: aemp.connectionsUrl };
+  }
+  const activeIds = aemp.activeIds || [];
+  const activeSerials = aemp.activeSerials || [];
+  if (activeIds.length === 0 && activeSerials.length === 0) return { updated: 0 };
+
+  // Mark active: jd_asset_id or serial_number matches AEMP list
+  await db.query(
+    `UPDATE equipment_assets SET is_active = true
+     WHERE user_id = $1 AND (jd_asset_id = ANY($2::text[]) OR serial_number = ANY($3::text[]))`,
+    [userId, activeIds.length ? activeIds : [''], activeSerials.length ? activeSerials : ['']]
+  );
+  // Mark inactive: JD equipment not in AEMP Fleet list
+  await db.query(
+    `UPDATE equipment_assets SET is_active = false
+     WHERE user_id = $1 AND jd_asset_id IS NOT NULL
+     AND NOT (jd_asset_id = ANY($2::text[]) OR serial_number = ANY($3::text[]))`,
+    [userId, activeIds.length ? activeIds : [''], activeSerials.length ? activeSerials : ['']]
+  );
+  // Manual (non-JD) equipment stays active
+  await db.query(
+    'UPDATE equipment_assets SET is_active = true WHERE user_id = $1 AND jd_asset_id IS NULL',
+    [userId]
+  );
+  return { updated: activeIds.length + activeSerials.length, connectionsUrl: aemp.connectionsUrl };
+}
+
+// Fallback: Fetch connected machine/asset IDs from JD Platform Connections API
 async function updateActiveFromConnections(accessToken) {
   const headers = {
     Authorization: `Bearer ${accessToken}`,
@@ -110,6 +228,10 @@ router.post('/sync', async (req, res) => {
     const triedEndpoints = [];
     let got403 = false;
 
+    // Refresh "on map" status from AEMP Fleet (ISO 15143-3) so Equipment tab shows only active machines
+    const aempRefresh = await updateActiveFromAEMP(accessToken);
+    if (aempRefresh.warning) await updateActiveFromConnections(accessToken);
+
     // Equipment API (official): GET /equipment?organizationIds=xxx — OAuth scope eq1, Accept: application/json
     const JD_EQUIPMENT_API = 'https://equipmentapi.deere.com/isg';
     const equipmentApiUrl = `${JD_EQUIPMENT_API}/equipment?organizationIds=${orgId}&itemLimit=100`;
@@ -167,9 +289,19 @@ router.post('/sync', async (req, res) => {
     }
 
     if (totalFetched > 0) {
-      await updateActiveFromConnections(accessToken);
+      const aempResult = await updateActiveFromAEMP(accessToken);
+      if (aempResult.warning) {
+        await updateActiveFromConnections(accessToken);
+        return res.json({
+          message: `Synced equipment from John Deere. ${assetsAdded} new asset(s) added, ${totalFetched} total. (AEMP map filter: ${aempResult.warning})`,
+          assetsAdded,
+          totalFetched,
+          aempWarning: aempResult.warning,
+          connectionsUrl: aempResult.connectionsUrl || null,
+        });
+      }
       return res.json({
-        message: `Synced equipment from John Deere. ${assetsAdded} new asset(s) added, ${totalFetched} total from JD.`,
+        message: `Synced equipment from John Deere. ${assetsAdded} new asset(s) added, ${totalFetched} total. "On map only" uses AEMP Fleet (active machines).`,
         assetsAdded,
         totalFetched,
       });
@@ -250,9 +382,19 @@ router.post('/sync', async (req, res) => {
       }
 
       if (totalFetched > 0) {
-        await updateActiveFromConnections(accessToken);
+        const aempResult = await updateActiveFromAEMP(accessToken);
+        if (aempResult.warning) {
+          await updateActiveFromConnections(accessToken);
+          return res.json({
+            message: `Synced equipment from John Deere. ${assetsAdded} new asset(s) added, ${totalFetched} total. (AEMP: ${aempResult.warning})`,
+            assetsAdded,
+            totalFetched,
+            aempWarning: aempResult.warning,
+            connectionsUrl: aempResult.connectionsUrl || null,
+          });
+        }
         return res.json({
-          message: `Synced equipment from John Deere. ${assetsAdded} new asset(s) added, ${totalFetched} total from JD.`,
+          message: `Synced equipment from John Deere. ${assetsAdded} new asset(s) added, ${totalFetched} total. "On map only" uses AEMP Fleet.`,
           assetsAdded,
           totalFetched,
         });
@@ -291,6 +433,35 @@ router.post('/sync', async (req, res) => {
     console.error('Equipment JD sync error:', error.response?.data || error.message);
     res.status(500).json({
       error: 'Failed to sync equipment from John Deere',
+      details: error.response?.data?.message || error.message,
+    });
+  }
+});
+
+// Refresh "on map" status from AEMP Fleet API (ISO 15143-3) - no full equipment sync
+router.post('/refresh-on-map', async (req, res) => {
+  try {
+    const jd = await getJDAccess();
+    if (jd.error) {
+      return res.status(400).json({ error: jd.error });
+    }
+    const result = await updateActiveFromAEMP(jd.accessToken);
+    if (result.warning) {
+      await updateActiveFromConnections(jd.accessToken);
+      return res.json({
+        message: `On-map status refreshed using Connections (AEMP: ${result.warning}). Enable organization access in Operations Center for AEMP map filter.`,
+        aempWarning: result.warning,
+        connectionsUrl: result.connectionsUrl || null,
+      });
+    }
+    res.json({
+      message: 'On-map status refreshed from AEMP Fleet (machines with active telematic state).',
+      updated: result.updated,
+    });
+  } catch (error) {
+    console.error('Refresh on-map error:', error.response?.data || error.message);
+    res.status(500).json({
+      error: 'Failed to refresh on-map status',
       details: error.response?.data?.message || error.message,
     });
   }
