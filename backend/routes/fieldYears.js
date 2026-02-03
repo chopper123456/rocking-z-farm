@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
+const requireAdmin = require('../middleware/requireAdmin');
+const { ORG_USER_ID } = require('../config/org');
 
 router.use(authMiddleware);
 
@@ -12,7 +14,7 @@ router.get('/:fieldName', async (req, res) => {
       `SELECT * FROM field_years 
        WHERE user_id = $1 AND field_name = $2
        ORDER BY year DESC`,
-      [req.user.userId, req.params.fieldName]
+      [ORG_USER_ID, req.params.fieldName]
     );
     res.json(result.rows);
   } catch (error) {
@@ -27,7 +29,7 @@ router.get('/:fieldName/:year', async (req, res) => {
     const result = await db.query(
       `SELECT * FROM field_years 
        WHERE user_id = $1 AND field_name = $2 AND year = $3`,
-      [req.user.userId, req.params.fieldName, req.params.year]
+      [ORG_USER_ID, req.params.fieldName, req.params.year]
     );
     
     if (result.rows.length === 0) {
@@ -41,8 +43,8 @@ router.get('/:fieldName/:year', async (req, res) => {
   }
 });
 
-// Add new year
-router.post('/', async (req, res) => {
+// Add new year (admin only)
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const { 
       fieldName, 
@@ -60,7 +62,7 @@ router.post('/', async (req, res) => {
        (user_id, field_name, year, crop, variety, planting_date, harvest_date, expected_yield, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
        RETURNING *`,
-      [req.user.userId, fieldName, year, crop, variety, plantingDate, harvestDate, expectedYield, notes]
+      [ORG_USER_ID, fieldName, year, crop, variety, plantingDate, harvestDate, expectedYield, notes]
     );
     
     res.status(201).json(result.rows[0]);
@@ -93,7 +95,7 @@ router.put('/:fieldName/:year', async (req, res) => {
        WHERE user_id = $8 AND field_name = $9 AND year = $10
        RETURNING *`,
       [crop, variety, plantingDate, harvestDate, expectedYield, actualYield, notes,
-       req.user.userId, req.params.fieldName, req.params.year]
+       ORG_USER_ID, req.params.fieldName, req.params.year]
     );
     
     if (result.rows.length === 0) {
@@ -107,12 +109,12 @@ router.put('/:fieldName/:year', async (req, res) => {
   }
 });
 
-// Delete year
-router.delete('/:fieldName/:year', async (req, res) => {
+// Delete year (admin only)
+router.delete('/:fieldName/:year', requireAdmin, async (req, res) => {
   try {
     const result = await db.query(
       'DELETE FROM field_years WHERE user_id = $1 AND field_name = $2 AND year = $3 RETURNING *',
-      [req.user.userId, req.params.fieldName, req.params.year]
+      [ORG_USER_ID, req.params.fieldName, req.params.year]
     );
     
     if (result.rows.length === 0) {

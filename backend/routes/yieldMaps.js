@@ -3,6 +3,8 @@ const router = express.Router();
 const multer = require('multer');
 const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
+const requireAdmin = require('../middleware/requireAdmin');
+const { ORG_USER_ID } = require('../config/org');
 
 router.use(authMiddleware);
 
@@ -21,7 +23,7 @@ router.get('/:fieldName/:year', async (req, res) => {
               moisture_avg, map_file_name, notes, created_at
        FROM yield_maps 
        WHERE user_id = $1 AND field_name = $2 AND year = $3`,
-      [req.user.userId, req.params.fieldName, req.params.year]
+      [ORG_USER_ID, req.params.fieldName, req.params.year]
     );
     
     if (result.rows.length === 0) {
@@ -42,7 +44,7 @@ router.get('/download/:fieldName/:year', async (req, res) => {
       `SELECT map_file_data, map_file_name, map_file_type 
        FROM yield_maps 
        WHERE user_id = $1 AND field_name = $2 AND year = $3`,
-      [req.user.userId, req.params.fieldName, req.params.year]
+      [ORG_USER_ID, req.params.fieldName, req.params.year]
     );
     
     if (result.rows.length === 0 || !result.rows[0].map_file_data) {
@@ -59,8 +61,8 @@ router.get('/download/:fieldName/:year', async (req, res) => {
   }
 });
 
-// Add or update yield map
-router.post('/', upload.single('mapFile'), async (req, res) => {
+// Add or update yield map (admin only)
+router.post('/', requireAdmin, upload.single('mapFile'), async (req, res) => {
   try {
     const { 
       fieldName, 
@@ -99,7 +101,7 @@ router.post('/', upload.single('mapFile'), async (req, res) => {
          notes = $11
        RETURNING id, field_name, year, harvest_date, average_yield, total_bushels,
                  moisture_avg, map_file_name, notes, created_at`,
-      [req.user.userId, fieldName, year, harvestDate, averageYield, totalBushels,
+      [ORG_USER_ID, fieldName, year, harvestDate, averageYield, totalBushels,
        moistureAvg, mapFileData, mapFileName, mapFileType, notes]
     );
     
@@ -110,12 +112,12 @@ router.post('/', upload.single('mapFile'), async (req, res) => {
   }
 });
 
-// Delete yield map
-router.delete('/:fieldName/:year', async (req, res) => {
+// Delete yield map (admin only)
+router.delete('/:fieldName/:year', requireAdmin, async (req, res) => {
   try {
     const result = await db.query(
       'DELETE FROM yield_maps WHERE user_id = $1 AND field_name = $2 AND year = $3 RETURNING *',
-      [req.user.userId, req.params.fieldName, req.params.year]
+      [ORG_USER_ID, req.params.fieldName, req.params.year]
     );
     
     if (result.rows.length === 0) {

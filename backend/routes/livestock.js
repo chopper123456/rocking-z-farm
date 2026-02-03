@@ -2,16 +2,17 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
+const requireAdmin = require('../middleware/requireAdmin');
+const { ORG_USER_ID } = require('../config/org');
 
-// All routes require authentication
 router.use(authMiddleware);
 
-// Get all livestock for user
+// Get all livestock (shared org data)
 router.get('/', async (req, res) => {
   try {
     const result = await db.query(
       'SELECT * FROM livestock WHERE user_id = $1 ORDER BY created_at DESC',
-      [req.user.userId]
+      [ORG_USER_ID]
     );
     res.json(result.rows);
   } catch (error) {
@@ -25,7 +26,7 @@ router.get('/:id', async (req, res) => {
   try {
     const result = await db.query(
       'SELECT * FROM livestock WHERE id = $1 AND user_id = $2',
-      [req.params.id, req.user.userId]
+      [req.params.id, ORG_USER_ID]
     );
     
     if (result.rows.length === 0) {
@@ -39,8 +40,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Add new livestock
-router.post('/', async (req, res) => {
+// Add new livestock (admin only)
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const { tagNumber, animalType, breed, birthdate, weight, healthStatus, location, notes } = req.body;
     
@@ -48,7 +49,7 @@ router.post('/', async (req, res) => {
       `INSERT INTO livestock (user_id, tag_number, animal_type, breed, birthdate, weight, health_status, location, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [req.user.userId, tagNumber, animalType, breed, birthdate, weight, healthStatus, location, notes]
+      [ORG_USER_ID, tagNumber, animalType, breed, birthdate, weight, healthStatus, location, notes]
     );
     
     res.status(201).json(result.rows[0]);
@@ -69,7 +70,7 @@ router.put('/:id', async (req, res) => {
            weight = $5, health_status = $6, location = $7, notes = $8, updated_at = CURRENT_TIMESTAMP
        WHERE id = $9 AND user_id = $10
        RETURNING *`,
-      [tagNumber, animalType, breed, birthdate, weight, healthStatus, location, notes, req.params.id, req.user.userId]
+      [tagNumber, animalType, breed, birthdate, weight, healthStatus, location, notes, req.params.id, ORG_USER_ID]
     );
     
     if (result.rows.length === 0) {
@@ -83,12 +84,12 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Delete livestock
-router.delete('/:id', async (req, res) => {
+// Delete livestock (admin only)
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const result = await db.query(
       'DELETE FROM livestock WHERE id = $1 AND user_id = $2 RETURNING *',
-      [req.params.id, req.user.userId]
+      [req.params.id, ORG_USER_ID]
     );
     
     if (result.rows.length === 0) {

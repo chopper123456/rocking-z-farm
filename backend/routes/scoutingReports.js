@@ -3,6 +3,8 @@ const router = express.Router();
 const multer = require('multer');
 const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
+const requireAdmin = require('../middleware/requireAdmin');
+const { ORG_USER_ID } = require('../config/org');
 
 router.use(authMiddleware);
 
@@ -30,7 +32,7 @@ router.get('/:fieldName/:year', async (req, res) => {
        FROM scouting_reports 
        WHERE user_id = $1 AND field_name = $2 AND year = $3
        ORDER BY report_date DESC`,
-      [req.user.userId, req.params.fieldName, req.params.year]
+      [ORG_USER_ID, req.params.fieldName, req.params.year]
     );
     res.json(result.rows);
   } catch (error) {
@@ -45,7 +47,7 @@ router.get('/detail/:id', async (req, res) => {
     const result = await db.query(
       `SELECT * FROM scouting_reports 
        WHERE id = $1 AND user_id = $2`,
-      [req.params.id, req.user.userId]
+      [req.params.id, ORG_USER_ID]
     );
     
     if (result.rows.length === 0) {
@@ -101,7 +103,7 @@ router.post('/', upload.single('photo'), async (req, res) => {
        RETURNING id, field_name, year, report_date, growth_stage, pest_pressure,
                  disease_notes, weed_pressure, general_notes, weather_conditions,
                  photo_name, created_at`,
-      [req.user.userId, fieldName, year, reportDate, growthStage, pestPressure,
+      [ORG_USER_ID, fieldName, year, reportDate, growthStage, pestPressure,
        diseaseNotes, weedPressure, generalNotes, weatherConditions,
        photoData, photoName, photoType]
     );
@@ -113,12 +115,12 @@ router.post('/', upload.single('photo'), async (req, res) => {
   }
 });
 
-// Delete scouting report
-router.delete('/:id', async (req, res) => {
+// Delete scouting report (admin only)
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const result = await db.query(
       'DELETE FROM scouting_reports WHERE id = $1 AND user_id = $2 RETURNING *',
-      [req.params.id, req.user.userId]
+      [req.params.id, ORG_USER_ID]
     );
     
     if (result.rows.length === 0) {

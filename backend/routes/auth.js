@@ -86,8 +86,10 @@ router.post('/login', [
         id: user.id,
         username: user.username,
         email: user.email,
+        fullName: user.full_name || user.farm_name,
         farmName: user.farm_name,
-        isAdmin: user.is_admin
+        isAdmin: user.is_admin,
+        role: user.is_admin ? 'admin' : 'team',
       }
     });
   } catch (error) {
@@ -96,15 +98,15 @@ router.post('/login', [
   }
 });
 
-// Register new employee (admin only)
+// Register new user (admin only); role = 'admin' | 'team'
 router.post('/register', authMiddleware, [
   body('username').trim().isLength({ min: 3 }).escape(),
   body('email').isEmail().normalizeEmail(),
-  body('password').isLength({ min: 8 }),
-  body('fullName').optional().trim().escape()
+  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  body('fullName').optional().trim().escape(),
+  body('role').optional().isIn(['admin', 'team']),
 ], async (req, res) => {
   try {
-    // Check if user is admin
     if (!req.user.isAdmin) {
       return res.status(403).json({ error: 'Only administrators can create new accounts' });
     }
@@ -114,9 +116,9 @@ router.post('/register', authMiddleware, [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { username, email, password, fullName } = req.body;
+    const { username, email, password, fullName, role } = req.body;
+    const isAdmin = role === 'admin';
 
-    // Check if user already exists
     const userExists = await db.query(
       'SELECT * FROM users WHERE email = $1 OR username = $2',
       [email, username]
@@ -126,15 +128,13 @@ router.post('/register', authMiddleware, [
       return res.status(400).json({ error: 'Username or email already exists' });
     }
 
-    // Hash password
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Insert user
     const result = await db.query(
-      `INSERT INTO users (username, email, password_hash, farm_name, is_admin, is_active, created_by)
-       VALUES ($1, $2, $3, $4, false, true, $5) RETURNING id, username, email, farm_name`,
-      [username, email, passwordHash, fullName || 'Rocking Z Acres', req.user.userId]
+      `INSERT INTO users (username, email, password_hash, farm_name, full_name, is_admin, is_active, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, true, $7) RETURNING id, username, email, farm_name, full_name, is_admin`,
+      [username, email, passwordHash, 'Rocking Z Acres', fullName || null, isAdmin, req.user.userId]
     );
 
     const newUser = result.rows[0];
@@ -165,7 +165,7 @@ router.get('/users', authMiddleware, async (req, res) => {
     }
 
     const result = await db.query(`
-      SELECT id, username, email, farm_name, is_admin, is_active, last_login, created_at
+      SELECT id, username, email, farm_name, full_name, is_admin, is_active, last_login, created_at
       FROM users
       ORDER BY created_at DESC
     `);

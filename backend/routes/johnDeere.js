@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const authMiddleware = require('../middleware/auth');
+const requireAdmin = require('../middleware/requireAdmin');
+const { ORG_USER_ID } = require('../config/org');
 const db = require('../config/database');
 
 // John Deere API URLs
@@ -9,32 +11,20 @@ const JD_AUTH_URL = 'https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/v1
 const JD_TOKEN_URL = 'https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/v1/token';
 const JD_API_URL = 'https://sandboxapi.deere.com/platform';
 
-// Initiate OAuth flow - Connect to John Deere
-router.get('/connect', async (req, res) => {
+// Initiate OAuth flow - Connect to John Deere (admin only; token stored for org)
+router.get('/connect', authMiddleware, requireAdmin, async (req, res) => {
   try {
-    // Get token from query string or header
     const token = req.query.token || req.header('Authorization')?.replace('Bearer ', '');
-    
     if (!token) {
       return res.status(401).json({ error: 'No authentication token provided' });
     }
-
-    // Verify and decode token
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log('Decoded JWT:', decoded);
-    
-    // For the simple login, we just use a fixed user ID since everyone shares one account
-    const userId = 1; // Fixed user ID for shared farm account
-    console.log('Using fixed user ID:', userId);
-    
+    require('jsonwebtoken').verify(token, process.env.JWT_SECRET);
     const authUrl = `${JD_AUTH_URL}?` +
       `client_id=${process.env.JOHN_DEERE_CLIENT_ID}` +
       `&response_type=code` +
       `&scope=ag1 ag2 ag3 eq1 eq2 org1 org2 files` +
       `&redirect_uri=${encodeURIComponent(process.env.JOHN_DEERE_CALLBACK_URL)}` +
-      `&state=${userId}`;
-    
+      `&state=${ORG_USER_ID}`;
     res.redirect(authUrl);
   } catch (error) {
     console.error('Connect error:', error);
@@ -58,16 +48,13 @@ router.get('/callback', async (req, res) => {
     return res.redirect('https://rocking-z-farm.vercel.app?jd_error=no_code');
   }
   
-  // State should contain userId, but if it's missing, we can't continue
-  const userId = state && state !== 'undefined' ? parseInt(state) : null;
-  
-  if (!userId) {
-    console.error('Invalid or missing userId in state:', state);
+  const orgId = state && state !== 'undefined' ? parseInt(state, 10) : null;
+  if (!orgId) {
+    console.error('Invalid or missing state:', state);
     return res.redirect('https://rocking-z-farm.vercel.app?jd_error=invalid_state');
   }
-  
+
   try {
-    // Exchange authorization code for access token
     const tokenResponse = await axios.post(
       JD_TOKEN_URL,
       new URLSearchParams({
@@ -84,11 +71,8 @@ router.get('/callback', async (req, res) => {
         }
       }
     );
-    
     const { access_token, refresh_token, expires_in } = tokenResponse.data;
-    
     const expiresAt = new Date(Date.now() + expires_in * 1000);
-    
     await db.query(`
       INSERT INTO john_deere_tokens (user_id, access_token, refresh_token, expires_at)
       VALUES ($1, $2, $3, $4)
@@ -98,9 +82,8 @@ router.get('/callback', async (req, res) => {
         refresh_token = $3,
         expires_at = $4,
         updated_at = CURRENT_TIMESTAMP
-    `, [userId, access_token, refresh_token, expiresAt]);
-    
-    console.log('Successfully stored tokens for user:', userId);
+    `, [orgId, access_token, refresh_token, expiresAt]);
+    console.log('Successfully stored John Deere tokens for org:', orgId);
     
     // Redirect back to frontend with success
     res.redirect('https://rocking-z-farm.vercel.app?jd_connected=true');
@@ -113,12 +96,9 @@ router.get('/callback', async (req, res) => {
 // Check connection status
 router.get('/status', authMiddleware, async (req, res) => {
   try {
-    // Use fixed userId since everyone shares the farm account
-    const userId = 1;
-    
     const result = await db.query(
       'SELECT expires_at FROM john_deere_tokens WHERE user_id = $1',
-      [userId]
+      [ORG_USER_ID]
     );
     
     if (result.rows.length === 0) {
@@ -141,11 +121,9 @@ router.get('/status', authMiddleware, async (req, res) => {
 // Get connections URL
 router.get('/connections-url', authMiddleware, async (req, res) => {
   try {
-    const userId = 1;
-    
     const tokenResult = await db.query(
       'SELECT access_token FROM john_deere_tokens WHERE user_id = $1',
-      [userId]
+      [ORG_USER_ID]
     );
     
     if (tokenResult.rows.length === 0) {
@@ -189,16 +167,12 @@ router.get('/connections-url', authMiddleware, async (req, res) => {
   }
 });
 
-// Sync fields from John Deere
-router.post('/sync/fields', authMiddleware, async (req, res) => {
+// Sync fields from John Deere (admin only)
+router.post('/sync/fields', authMiddleware, requireAdmin, async (req, res) => {
   try {
-    // Use fixed userId since everyone shares the farm account
-    const userId = 1;
-    
-    // Get access token
     const tokenResult = await db.query(
       'SELECT access_token FROM john_deere_tokens WHERE user_id = $1',
-      [userId]
+      [ORG_USER_ID]
     );
     
     if (tokenResult.rows.length === 0) {
@@ -295,7 +269,7 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
           // Check if field already exists
           const existing = await db.query(
             'SELECT id FROM fields WHERE field_name = $1 AND user_id = $2',
-            [field.name, userId]
+            [field.name, ORG_USER_ID]
           );
           
           if (existing.rows.length === 0) {
@@ -316,7 +290,7 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
           await db.query(`
             INSERT INTO john_deere_data (user_id, data_type, field_name, sync_date, raw_data)
             VALUES ($1, $2, $3, NOW(), $4)
-          `, [userId, 'field', field.name, JSON.stringify(field)]);
+          `, [ORG_USER_ID, 'field', field.name, JSON.stringify(field)]);
           
         } catch (fieldError) {
           console.error('Error importing field:', field.name, fieldError);
@@ -339,15 +313,12 @@ router.post('/sync/fields', authMiddleware, async (req, res) => {
   }
 });
 
-// Disconnect John Deere
-router.delete('/disconnect', authMiddleware, async (req, res) => {
+// Disconnect John Deere (admin only)
+router.delete('/disconnect', authMiddleware, requireAdmin, async (req, res) => {
   try {
-    // Use fixed userId since everyone shares the farm account
-    const userId = 1;
-    
     await db.query(
       'DELETE FROM john_deere_tokens WHERE user_id = $1',
-      [userId]
+      [ORG_USER_ID]
     );
     
     res.json({ message: 'John Deere disconnected successfully' });

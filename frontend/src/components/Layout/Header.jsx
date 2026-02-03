@@ -32,7 +32,10 @@ function Header({ user, onLogout, title }) {
               className="menu-trigger"
               onClick={() => setShowMenu(!showMenu)}
             >
-              <span className="user-name">{user?.username}</span>
+              <span className="user-name">{user?.fullName || user?.username}</span>
+              <span className={`role-badge role-${user?.role || (user?.isAdmin ? 'admin' : 'team')}`}>
+                {user?.role === 'admin' || user?.isAdmin ? 'Admin' : 'Team'}
+              </span>
               <span className="menu-icon">▼</span>
             </button>
 
@@ -46,12 +49,14 @@ function Header({ user, onLogout, title }) {
                   }}>
                     ⚙️ Settings
                   </div>
-                  <div className="menu-item" onClick={() => {
-                    navigate('/john-deere');
-                    setShowMenu(false);
-                  }}>
-                    🚜 John Deere Integration
-                  </div>
+                  {user?.isAdmin && (
+                    <div className="menu-item" onClick={() => {
+                      navigate('/john-deere');
+                      setShowMenu(false);
+                    }}>
+                      🚜 John Deere Integration
+                    </div>
+                  )}
                 </div>
 
                 {user?.isAdmin && (

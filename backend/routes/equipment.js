@@ -2,23 +2,23 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
+const requireAdmin = require('../middleware/requireAdmin');
+const { ORG_USER_ID } = require('../config/org');
 
 router.use(authMiddleware);
 
-const userId = 1; // Fixed for shared farm account
-
-// List all equipment assets (optional: ?activeOnly=true to show only JD-connected/active, i.e. "on map")
+// List all equipment assets (shared org data; optional: ?activeOnly=true)
 router.get('/', async (req, res) => {
   try {
     const activeOnly = req.query.activeOnly === 'true' || req.query.activeOnly === '1';
     const result = activeOnly
       ? await db.query(
           `SELECT * FROM equipment_assets WHERE user_id = $1 AND (is_active IS NOT FALSE) AND jd_asset_id IS NOT NULL ORDER BY category, name`,
-          [userId]
+          [ORG_USER_ID]
         )
       : await db.query(
           `SELECT * FROM equipment_assets WHERE user_id = $1 ORDER BY category, name`,
-          [userId]
+          [ORG_USER_ID]
         );
     res.json(result.rows);
   } catch (error) {
@@ -32,7 +32,7 @@ router.get('/:id', async (req, res) => {
   try {
     const result = await db.query(
       'SELECT * FROM equipment_assets WHERE id = $1 AND user_id = $2',
-      [req.params.id, userId]
+      [req.params.id, ORG_USER_ID]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Equipment not found' });
@@ -44,8 +44,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Create equipment asset
-router.post('/', async (req, res) => {
+// Create equipment asset (admin only)
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const {
       name,
@@ -72,7 +72,7 @@ router.post('/', async (req, res) => {
         insurance_policy, insurance_expires, registration_number, registration_expires, notes
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
       [
-        userId,
+        ORG_USER_ID,
         name || 'Unnamed',
         category || 'tractor',
         make || null,
@@ -97,7 +97,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Update equipment asset
+// Update equipment asset (admin: full; team: hours/notes only via maintenance/fuel)
 router.put('/:id', async (req, res) => {
   try {
     const {
@@ -117,6 +117,11 @@ router.put('/:id', async (req, res) => {
       registrationExpires,
       notes,
     } = req.body;
+
+    // Team can only update current_hours and notes (e.g. from maintenance); admin can update all
+    if (!req.user.isAdmin && (name !== undefined || category !== undefined || make !== undefined || model !== undefined || year !== undefined || purchaseDate !== undefined || purchaseCost !== undefined || insurancePolicy !== undefined || insuranceExpires !== undefined || registrationNumber !== undefined || registrationExpires !== undefined)) {
+      return res.status(403).json({ error: 'Only admins can edit core equipment data' });
+    }
 
     const result = await db.query(
       `UPDATE equipment_assets SET
@@ -139,7 +144,7 @@ router.put('/:id', async (req, res) => {
       WHERE id = $1 AND user_id = $2 RETURNING *`,
       [
         req.params.id,
-        userId,
+        ORG_USER_ID,
         name,
         category,
         make,
@@ -168,12 +173,12 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Delete equipment asset (cascades to maintenance, parts, fuel, operators)
-router.delete('/:id', async (req, res) => {
+// Delete equipment asset (admin only; cascades to maintenance, parts, fuel, operators)
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const result = await db.query(
       'DELETE FROM equipment_assets WHERE id = $1 AND user_id = $2 RETURNING *',
-      [req.params.id, userId]
+      [req.params.id, ORG_USER_ID]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Equipment not found' });

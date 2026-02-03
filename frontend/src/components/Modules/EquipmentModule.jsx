@@ -455,7 +455,7 @@ function EquipmentModule({ user, onLogout }) {
       type: 'service',
       icon: '🔧',
       title: m.service_type,
-      details: [m.description, m.cost ? `$${Number(m.cost).toFixed(2)}` : '', m.hours_at_service ? `${m.hours_at_service} hrs` : ''].filter(Boolean).join(' • '),
+      details: [m.description, user?.isAdmin && m.cost ? `$${Number(m.cost).toFixed(2)}` : '', m.hours_at_service ? `${m.hours_at_service} hrs` : ''].filter(Boolean).join(' • '),
       data: m,
     }))
     .sort((a, b) => b.date - a.date);
@@ -470,12 +470,16 @@ function EquipmentModule({ user, onLogout }) {
             <div className="section-header">
               <h2>🚜 Equipment</h2>
               <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <button className="action-btn jd-btn" onClick={handleSyncFromJD} disabled={syncingJD} title="Sync equipment from John Deere Operations Center">
-                  {syncingJD ? '⏳ Syncing...' : '🚜 Sync from John Deere'}
-                </button>
-                <button className="add-button" onClick={() => setShowAddEquipment(true)}>
-                  + Add Equipment
-                </button>
+                {user?.isAdmin && (
+                  <>
+                    <button className="action-btn jd-btn" onClick={handleSyncFromJD} disabled={syncingJD} title="Sync equipment from John Deere Operations Center">
+                      {syncingJD ? '⏳ Syncing...' : '🚜 Sync from John Deere'}
+                    </button>
+                    <button className="add-button" onClick={() => setShowAddEquipment(true)}>
+                      + Add Equipment
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             {syncMessage && (
@@ -531,11 +535,11 @@ function EquipmentModule({ user, onLogout }) {
                   <button type="button" className="add-button" style={{ marginTop: '1rem' }} onClick={() => setActiveOnly(false)}>
                     Show all equipment
                   </button>
-                ) : (
+                ) : user?.isAdmin ? (
                   <button className="add-button" style={{ marginTop: '1rem' }} onClick={() => setShowAddEquipment(true)}>
                     + Add Equipment
                   </button>
-                )}
+                ) : null}
               </div>
             ) : (
               <>
@@ -577,6 +581,7 @@ function EquipmentModule({ user, onLogout }) {
                         <div className="equipment-card-header">
                           <h3>{asset.name}</h3>
                           <div className="equipment-card-actions">
+                            {user?.isAdmin && (
                             <div className="move-to-wrapper">
                               <button
                                 type="button"
@@ -611,6 +616,7 @@ function EquipmentModule({ user, onLogout }) {
                                 </>
                               )}
                             </div>
+                            )}
                           </div>
                         </div>
                         <div className="equipment-meta">
@@ -634,14 +640,16 @@ function EquipmentModule({ user, onLogout }) {
               <button className="back-button" onClick={() => { setView('list'); setSelectedAsset(null); }}>
                 ← Back to Equipment
               </button>
-              <div>
-                <button className="edit-btn" onClick={() => { setEditEquipment({ name: selectedAsset.name, category: selectedAsset.category, make: selectedAsset.make, model: selectedAsset.model, year: selectedAsset.year || '', serialNumber: selectedAsset.serial_number || '', currentHours: selectedAsset.current_hours ?? '', currentMiles: selectedAsset.current_miles ?? '', purchaseDate: selectedAsset.purchase_date?.split('T')[0] || '', purchaseCost: selectedAsset.purchase_cost ?? '', insurancePolicy: selectedAsset.insurance_policy || '', insuranceExpires: selectedAsset.insurance_expires?.split('T')[0] || '', registrationNumber: selectedAsset.registration_number || '', registrationExpires: selectedAsset.registration_expires?.split('T')[0] || '', notes: selectedAsset.notes || '' }); setShowEditEquipment(true); }}>
-                  ✏️ Edit
-                </button>
-                <button className="delete-equipment-btn" style={{ marginLeft: '0.5rem' }} onClick={handleDeleteEquipment}>
-                  🗑️ Delete
-                </button>
-              </div>
+              {user?.isAdmin && (
+                <div>
+                  <button className="edit-btn" onClick={() => { setEditEquipment({ name: selectedAsset.name, category: selectedAsset.category, make: selectedAsset.make, model: selectedAsset.model, year: selectedAsset.year || '', serialNumber: selectedAsset.serial_number || '', currentHours: selectedAsset.current_hours ?? '', currentMiles: selectedAsset.current_miles ?? '', purchaseDate: selectedAsset.purchase_date?.split('T')[0] || '', purchaseCost: selectedAsset.purchase_cost ?? '', insurancePolicy: selectedAsset.insurance_policy || '', insuranceExpires: selectedAsset.insurance_expires?.split('T')[0] || '', registrationNumber: selectedAsset.registration_number || '', registrationExpires: selectedAsset.registration_expires?.split('T')[0] || '', notes: selectedAsset.notes || '' }); setShowEditEquipment(true); }}>
+                    ✏️ Edit
+                  </button>
+                  <button className="delete-equipment-btn" style={{ marginLeft: '0.5rem' }} onClick={handleDeleteEquipment}>
+                    🗑️ Delete
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="equipment-detail-header">
@@ -651,32 +659,40 @@ function EquipmentModule({ user, onLogout }) {
                 {selectedAsset.current_hours != null && selectedAsset.current_hours > 0 && ` • ${Number(selectedAsset.current_hours).toLocaleString()} hrs`}
                 {selectedAsset.jd_asset_id && ' • John Deere'}
               </p>
-              <div className="equipment-detail-category">
-                <label>
-                  Category:{' '}
-                  <select
-                    value={(selectedAsset.category || 'tractor').toLowerCase()}
-                    onChange={(e) => handleMoveToCategory(selectedAsset.id, e.target.value)}
-                  >
-                    {CATEGORIES.map((c) => (
-                      <option key={c.value} value={c.value}>{c.label}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              {user?.isAdmin && (
+                <div className="equipment-detail-category">
+                  <label>
+                    Category:{' '}
+                    <select
+                      value={(selectedAsset.category || 'tractor').toLowerCase()}
+                      onChange={(e) => handleMoveToCategory(selectedAsset.id, e.target.value)}
+                    >
+                      {CATEGORIES.map((c) => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
             </div>
 
             <div className="action-buttons-grid">
-              <button className="action-btn jd-btn" onClick={handleSyncFromJD}>🚜 Sync from John Deere</button>
-              {selectedAsset.jd_asset_id && (
-                <button className="action-btn jd-btn" onClick={handleSyncHours}>📊 Sync Hours from JD</button>
+              {user?.isAdmin && (
+                <>
+                  <button className="action-btn jd-btn" onClick={handleSyncFromJD}>🚜 Sync from John Deere</button>
+                  {selectedAsset.jd_asset_id && (
+                    <button className="action-btn jd-btn" onClick={handleSyncHours}>📊 Sync Hours from JD</button>
+                  )}
+                </>
               )}
               <button className="action-btn" onClick={() => setShowAddService(true)}>🔧 Log Service</button>
               <button className="action-btn" onClick={() => setShowAddSchedule(true)}>📅 Add Schedule</button>
               <button className="action-btn" onClick={() => setShowAddPart(true)}>🔩 Add Part</button>
               <button className="action-btn" onClick={() => setShowAddFuel(true)}>⛽ Log Fuel</button>
               <button className="action-btn" onClick={() => setShowAddOperator(true)}>👤 Assign Operator</button>
-              <button className="action-btn" onClick={() => { setShowReports(true); loadReports(); }}>📊 Reports</button>
+              {user?.isAdmin && (
+                <button className="action-btn" onClick={() => { setShowReports(true); loadReports(); }}>📊 Reports</button>
+              )}
             </div>
 
             <div className="detail-tabs">
@@ -705,10 +721,12 @@ function EquipmentModule({ user, onLogout }) {
                     <span className="stat-label">Purchase</span>
                     <span className="stat-value">{selectedAsset.purchase_date ? new Date(selectedAsset.purchase_date).toLocaleDateString() : '—'}</span>
                   </div>
-                  <div className="stat-item">
-                    <span className="stat-label">Purchase Cost</span>
-                    <span className="stat-value">{selectedAsset.purchase_cost != null ? `$${Number(selectedAsset.purchase_cost).toLocaleString()}` : '—'}</span>
-                  </div>
+                  {user?.isAdmin && (
+                    <div className="stat-item">
+                      <span className="stat-label">Purchase Cost</span>
+                      <span className="stat-value">{selectedAsset.purchase_cost != null ? `$${Number(selectedAsset.purchase_cost).toLocaleString()}` : '—'}</span>
+                    </div>
+                  )}
                   <div className="stat-item">
                     <span className="stat-label">Serial</span>
                     <span className="stat-value">{selectedAsset.serial_number || '—'}</span>
@@ -842,7 +860,7 @@ function EquipmentModule({ user, onLogout }) {
                   <ul style={{ listStyle: 'none', padding: 0 }}>
                     {fuelLogs.map((f) => (
                       <li key={f.id} style={{ padding: '0.5rem 0', borderBottom: '1px solid #eee' }}>
-                        {new Date(f.fuel_date).toLocaleDateString()} — {Number(f.gallons).toFixed(1)} gal{f.cost ? ` — $${Number(f.cost).toFixed(2)}` : ''}
+                        {new Date(f.fuel_date).toLocaleDateString()} — {Number(f.gallons).toFixed(1)} gal{user?.isAdmin && f.cost ? ` — $${Number(f.cost).toFixed(2)}` : ''}
                       </li>
                     ))}
                   </ul>
@@ -1032,9 +1050,11 @@ function EquipmentModule({ user, onLogout }) {
                   <textarea value={newService.description} onChange={(e) => setNewService({ ...newService, description: e.target.value })} rows={2} />
                 </div>
                 <div className="form-group">
-                  <label>Cost / Hours at service</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                    <input type="number" step="0.01" value={newService.cost} onChange={(e) => setNewService({ ...newService, cost: e.target.value })} placeholder="Cost" />
+                  <label>{user?.isAdmin ? 'Cost / Hours at service' : 'Hours at service'}</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: user?.isAdmin ? '1fr 1fr' : '1fr', gap: '0.5rem' }}>
+                    {user?.isAdmin && (
+                      <input type="number" step="0.01" value={newService.cost} onChange={(e) => setNewService({ ...newService, cost: e.target.value })} placeholder="Cost" />
+                    )}
                     <input type="number" step="0.1" value={newService.hoursAtService} onChange={(e) => setNewService({ ...newService, hoursAtService: e.target.value })} placeholder="Hours" />
                   </div>
                 </div>
@@ -1131,10 +1151,12 @@ function EquipmentModule({ user, onLogout }) {
                   <input type="date" required value={newFuel.fuelDate} onChange={(e) => setNewFuel({ ...newFuel, fuelDate: e.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label>Gallons * / Cost / Hours</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
+                  <label>{user?.isAdmin ? 'Gallons * / Cost / Hours' : 'Gallons * / Hours'}</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: user?.isAdmin ? '1fr 1fr 1fr' : '1fr 1fr', gap: '0.5rem' }}>
                     <input type="number" step="0.1" required value={newFuel.gallons} onChange={(e) => setNewFuel({ ...newFuel, gallons: e.target.value })} placeholder="Gal" />
-                    <input type="number" step="0.01" value={newFuel.cost} onChange={(e) => setNewFuel({ ...newFuel, cost: e.target.value })} placeholder="Cost" />
+                    {user?.isAdmin && (
+                      <input type="number" step="0.01" value={newFuel.cost} onChange={(e) => setNewFuel({ ...newFuel, cost: e.target.value })} placeholder="Cost" />
+                    )}
                     <input type="number" step="0.1" value={newFuel.hoursAtFill} onChange={(e) => setNewFuel({ ...newFuel, hoursAtFill: e.target.value })} placeholder="Hours" />
                   </div>
                 </div>

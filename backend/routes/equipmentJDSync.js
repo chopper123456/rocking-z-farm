@@ -4,10 +4,10 @@ const axios = require('axios');
 const { XMLParser } = require('fast-xml-parser');
 const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
+const requireAdmin = require('../middleware/requireAdmin');
+const { ORG_USER_ID } = require('../config/org');
 
 router.use(authMiddleware);
-
-const userId = 1;
 const JD_API_URL = 'https://sandboxapi.deere.com/platform';
 // ISO 15143-3 (AEMP 2.0) Fleet API - returns only machines with telematic state "active" (on the map)
 const AEMP_BASE_URL = process.env.JD_AEMP_URL || 'https://sandboxaemp.deere.com';
@@ -110,19 +110,19 @@ async function updateActiveFromAEMP(accessToken) {
   await db.query(
     `UPDATE equipment_assets SET is_active = true
      WHERE user_id = $1 AND (jd_asset_id = ANY($2::text[]) OR serial_number = ANY($3::text[]))`,
-    [userId, activeIds.length ? activeIds : [''], activeSerials.length ? activeSerials : ['']]
+    [ORG_USER_ID, activeIds.length ? activeIds : [''], activeSerials.length ? activeSerials : ['']]
   );
   // Mark inactive: JD equipment not in AEMP Fleet list
   await db.query(
     `UPDATE equipment_assets SET is_active = false
      WHERE user_id = $1 AND jd_asset_id IS NOT NULL
      AND NOT (jd_asset_id = ANY($2::text[]) OR serial_number = ANY($3::text[]))`,
-    [userId, activeIds.length ? activeIds : [''], activeSerials.length ? activeSerials : ['']]
+    [ORG_USER_ID, activeIds.length ? activeIds : [''], activeSerials.length ? activeSerials : ['']]
   );
   // Manual (non-JD) equipment stays active
   await db.query(
     'UPDATE equipment_assets SET is_active = true WHERE user_id = $1 AND jd_asset_id IS NULL',
-    [userId]
+    [ORG_USER_ID]
   );
   return { updated: activeIds.length + activeSerials.length, connectionsUrl: aemp.connectionsUrl };
 }
@@ -151,19 +151,19 @@ async function updateActiveFromConnections(accessToken) {
   if (connectedIds.length === 0) return;
   await db.query(
     'UPDATE equipment_assets SET is_active = (jd_asset_id = ANY($1::text[])) WHERE user_id = $2 AND jd_asset_id IS NOT NULL',
-    [connectedIds, userId]
+    [connectedIds, ORG_USER_ID]
   );
   await db.query(
     'UPDATE equipment_assets SET is_active = true WHERE user_id = $1 AND jd_asset_id IS NULL',
-    [userId]
+    [ORG_USER_ID]
   );
 }
 
-// Get John Deere access token and enabled org (shared helper)
+// Get John Deere access token and enabled org (shared org token)
 async function getJDAccess() {
   const tokenResult = await db.query(
     'SELECT access_token FROM john_deere_tokens WHERE user_id = $1',
-    [userId]
+    [ORG_USER_ID]
   );
   if (tokenResult.rows.length === 0) {
     return { error: 'John Deere not connected' };
@@ -222,8 +222,8 @@ function parseJDMachine(item) {
   return { name, jdId: String(jdId), make, model, year, serialNumber, hours, category, raw: item };
 }
 
-// Sync equipment list from John Deere Operations Center
-router.post('/sync', async (req, res) => {
+// Sync equipment list from John Deere Operations Center (admin only)
+router.post('/sync', requireAdmin, async (req, res) => {
   try {
     const jd = await getJDAccess();
     if (jd.error) {
@@ -268,7 +268,7 @@ router.post('/sync', async (req, res) => {
 
           const existing = await db.query(
             'SELECT id FROM equipment_assets WHERE jd_asset_id = $1 AND user_id = $2',
-            [parsed.jdId, userId]
+            [parsed.jdId, ORG_USER_ID]
           );
           if (existing.rows.length > 0) {
             await db.query(
@@ -279,7 +279,7 @@ router.post('/sync', async (req, res) => {
           }
           await db.query(
             `INSERT INTO equipment_assets (user_id, name, category, make, model, year, serial_number, current_hours, jd_asset_id, jd_raw_data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-            [userId, parsed.name, parsed.category, parsed.make, parsed.model, parsed.year, parsed.serialNumber, parsed.hours, parsed.jdId, JSON.stringify(parsed.raw)]
+            [ORG_USER_ID, parsed.name, parsed.category, parsed.make, parsed.model, parsed.year, parsed.serialNumber, parsed.hours, parsed.jdId, JSON.stringify(parsed.raw)]
           );
           assetsAdded++;
         }
@@ -347,7 +347,7 @@ router.post('/sync', async (req, res) => {
 
             const existing = await db.query(
               'SELECT id FROM equipment_assets WHERE jd_asset_id = $1 AND user_id = $2',
-              [parsed.jdId, userId]
+              [parsed.jdId, ORG_USER_ID]
             );
             if (existing.rows.length > 0) {
               await db.query(
@@ -362,7 +362,7 @@ router.post('/sync', async (req, res) => {
                 user_id, name, category, make, model, year, serial_number, current_hours, jd_asset_id, jd_raw_data
               ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
               [
-                userId,
+                ORG_USER_ID,
                 parsed.name,
                 parsed.category,
                 parsed.make,
@@ -447,7 +447,7 @@ router.post('/sync', async (req, res) => {
 });
 
 // Refresh "on map" status from AEMP Fleet API (ISO 15143-3) - no full equipment sync
-router.post('/refresh-on-map', async (req, res) => {
+router.post('/refresh-on-map', requireAdmin, async (req, res) => {
   try {
     const jd = await getJDAccess();
     if (jd.error) {
@@ -476,7 +476,7 @@ router.post('/refresh-on-map', async (req, res) => {
 });
 
 // Get usage hours from JD (if telemetry available) and update local asset
-router.post('/sync-hours/:assetId', async (req, res) => {
+router.post('/sync-hours/:assetId', requireAdmin, async (req, res) => {
   try {
     const jd = await getJDAccess();
     if (jd.error) {
@@ -485,7 +485,7 @@ router.post('/sync-hours/:assetId', async (req, res) => {
 
     const asset = await db.query(
       'SELECT id, jd_asset_id, name FROM equipment_assets WHERE id = $1 AND user_id = $2',
-      [req.params.assetId, userId]
+      [req.params.assetId, ORG_USER_ID]
     );
     if (asset.rows.length === 0) {
       return res.status(404).json({ error: 'Equipment not found' });
@@ -537,7 +537,7 @@ router.post('/sync-hours/:assetId', async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
        ON CONFLICT (user_id, jd_asset_id) DO UPDATE SET
          equipment_asset_id = $3, name = $4, last_hours = $5, last_sync_at = CURRENT_TIMESTAMP`,
-      [userId, jdAssetId, req.params.assetId, asset.rows[0].name, hours]
+      [ORG_USER_ID, jdAssetId, req.params.assetId, asset.rows[0].name, hours]
     );
 
     res.json({
@@ -555,7 +555,7 @@ async function syncEquipmentFromFieldOperations() {
   const result = await db.query(
     `SELECT DISTINCT equipment_used AS name FROM field_operations
      WHERE user_id = $1 AND equipment_used IS NOT NULL AND TRIM(equipment_used) != ''`,
-    [userId]
+    [ORG_USER_ID]
   );
   let added = 0;
   for (const row of result.rows || []) {
@@ -563,12 +563,12 @@ async function syncEquipmentFromFieldOperations() {
     if (!name) continue;
     const existing = await db.query(
       'SELECT id FROM equipment_assets WHERE user_id = $1 AND (name = $2 OR name ILIKE $2)',
-      [userId, name]
+      [ORG_USER_ID, name]
     );
     if (existing.rows.length > 0) continue;
     await db.query(
       `INSERT INTO equipment_assets (user_id, name, category, notes) VALUES ($1, $2, 'tractor', $3)`,
-      [userId, name, 'Added from John Deere field operations']
+      [ORG_USER_ID, name, 'Added from John Deere field operations']
     );
     added++;
   }
@@ -576,7 +576,7 @@ async function syncEquipmentFromFieldOperations() {
 }
 
 // Sync equipment from John Deere: first try machines API, then add any equipment names from field operations
-router.post('/sync-from-operations', async (req, res) => {
+router.post('/sync-from-operations', requireAdmin, async (req, res) => {
   try {
     const added = await syncEquipmentFromFieldOperations();
     res.json({
@@ -597,7 +597,7 @@ router.get('/field-usage', async (req, res) => {
        FROM field_operations
        WHERE user_id = $1 AND equipment_used IS NOT NULL AND equipment_used != ''
        ORDER BY operation_date DESC`,
-      [userId]
+      [ORG_USER_ID]
     );
     res.json(result.rows);
   } catch (error) {
@@ -736,7 +736,7 @@ router.get('/reports/utilization', async (req, res) => {
       LEFT JOIN equipment_maintenance m ON m.equipment_asset_id = e.id AND m.user_id = e.user_id
       WHERE e.user_id = $1
     `;
-    const params = [userId];
+    const params = [ORG_USER_ID];
     if (assetId) {
       params.push(assetId);
       query += ` AND e.id = $${params.length}`;
@@ -754,8 +754,8 @@ router.get('/reports/utilization', async (req, res) => {
   }
 });
 
-// Maintenance cost summary
-router.get('/reports/maintenance-costs', async (req, res) => {
+// Maintenance cost summary (admin only - financial)
+router.get('/reports/maintenance-costs', requireAdmin, async (req, res) => {
   try {
     const { assetId, year } = req.query;
     let query = `
@@ -766,7 +766,7 @@ router.get('/reports/maintenance-costs', async (req, res) => {
       LEFT JOIN equipment_maintenance m ON m.equipment_asset_id = e.id AND m.user_id = e.user_id
       WHERE e.user_id = $1 AND m.cost IS NOT NULL
     `;
-    const params = [userId];
+    const params = [ORG_USER_ID];
     if (assetId) {
       params.push(assetId);
       query += ` AND e.id = $${params.length}`;
@@ -797,7 +797,7 @@ router.get('/reports/fuel', async (req, res) => {
       LEFT JOIN equipment_fuel_logs f ON f.equipment_asset_id = e.id AND f.user_id = e.user_id
       WHERE e.user_id = $1
     `;
-    const params = [userId];
+    const params = [ORG_USER_ID];
     if (assetId) {
       params.push(assetId);
       query += ` AND e.id = $${params.length}`;
@@ -815,14 +815,14 @@ router.get('/reports/fuel', async (req, res) => {
   }
 });
 
-// Depreciation tracking (simple: purchase cost and current hours for rough value)
-router.get('/reports/depreciation', async (req, res) => {
+// Depreciation tracking (admin only - financial)
+router.get('/reports/depreciation', requireAdmin, async (req, res) => {
   try {
     const result = await db.query(
       `SELECT id, name, category, purchase_date, purchase_cost, current_hours, year
        FROM equipment_assets WHERE user_id = $1 AND (purchase_cost IS NOT NULL OR current_hours IS NOT NULL)
        ORDER BY name`,
-      [userId]
+      [ORG_USER_ID]
     );
     res.json(result.rows);
   } catch (error) {
@@ -841,7 +841,7 @@ router.get('/alerts', async (req, res) => {
        WHERE s.user_id = $1
          AND (s.next_due_date <= CURRENT_DATE + INTERVAL '30 days' OR s.next_due_hours <= e.current_hours + 50)
        ORDER BY s.next_due_date ASC NULLS LAST, s.next_due_hours ASC NULLS LAST`,
-      [userId]
+      [ORG_USER_ID]
     );
     res.json(result.rows);
   } catch (error) {

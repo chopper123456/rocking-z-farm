@@ -8,14 +8,16 @@ function Login({ onLogin }) {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
+    rememberMe: false,
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
+    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [e.target.name]: value,
     });
   };
 
@@ -26,7 +28,7 @@ function Login({ onLogin }) {
 
     try {
       const response = await authAPI.login(formData);
-      onLogin(response.data.token, response.data.user);
+      onLogin(response.data.token, response.data.user, formData.rememberMe);
       navigate('/');
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed. Please try again.');
@@ -71,7 +73,21 @@ function Login({ onLogin }) {
               onChange={handleChange}
               required
               autoComplete="current-password"
+              minLength={1}
             />
+            <small className="form-hint">Passwords must be at least 8 characters.</small>
+          </div>
+          
+          <div className="form-group form-group-checkbox">
+            <label>
+              <input
+                type="checkbox"
+                name="rememberMe"
+                checked={formData.rememberMe}
+                onChange={handleChange}
+              />
+              Remember me
+            </label>
           </div>
           
           <button type="submit" className="btn-primary" disabled={loading}>

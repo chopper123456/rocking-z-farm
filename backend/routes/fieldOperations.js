@@ -15,7 +15,7 @@ router.get('/:fieldName/:year', async (req, res) => {
       `SELECT * FROM field_operations 
        WHERE user_id = $1 AND field_name = $2 AND year = $3
        ORDER BY operation_date DESC`,
-      [req.user.userId, req.params.fieldName, req.params.year]
+      [ORG_USER_ID, req.params.fieldName, req.params.year]
     );
     res.json(result.rows);
   } catch (error) {
@@ -24,16 +24,14 @@ router.get('/:fieldName/:year', async (req, res) => {
   }
 });
 
-// Sync field operations from John Deere
-router.post('/sync/:fieldName/:year', async (req, res) => {
+// Sync field operations from John Deere (admin only)
+router.post('/sync/:fieldName/:year', requireAdmin, async (req, res) => {
   try {
     const { fieldName, year } = req.params;
-    const userId = 1; // Fixed user ID for shared account
     
-    // Get John Deere access token
     const tokenResult = await db.query(
       'SELECT access_token FROM john_deere_tokens WHERE user_id = $1',
-      [userId]
+      [ORG_USER_ID]
     );
     
     if (tokenResult.rows.length === 0) {
@@ -107,7 +105,7 @@ router.post('/sync/:fieldName/:year', async (req, res) => {
             // Check if operation already exists
             const existingOp = await db.query(
               'SELECT id FROM field_operations WHERE jd_operation_id = $1 AND user_id = $2',
-              [op.id, userId]
+              [op.id, ORG_USER_ID]
             );
             
             if (existingOp.rows.length === 0) {
@@ -163,7 +161,7 @@ router.post('/sync/:fieldName/:year', async (req, res) => {
            WHERE user_id = $1 AND field_name = $2 AND year = $3 
            AND operation_type ILIKE '%plant%'
            ORDER BY operation_date ASC LIMIT 1`,
-          [userId, fieldName, year]
+          [ORG_USER_ID, fieldName, year]
         );
         
         // Find harvest operation
@@ -172,12 +170,12 @@ router.post('/sync/:fieldName/:year', async (req, res) => {
            WHERE user_id = $1 AND field_name = $2 AND year = $3 
            AND operation_type ILIKE '%harvest%'
            ORDER BY operation_date DESC LIMIT 1`,
-          [userId, fieldName, year]
+          [ORG_USER_ID, fieldName, year]
         );
         
         // Update field_years with dates
         let updateFields = [];
-        let updateValues = [userId, fieldName, year];
+        let updateValues = [ORG_USER_ID, fieldName, year];
         let paramIndex = 4;
         
         if (plantingOp.rows.length > 0) {
@@ -216,12 +214,12 @@ router.post('/sync/:fieldName/:year', async (req, res) => {
   }
 });
 
-// Delete operation
-router.delete('/:id', async (req, res) => {
+// Delete operation (admin only)
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const result = await db.query(
       'DELETE FROM field_operations WHERE id = $1 AND user_id = $2 RETURNING *',
-      [req.params.id, req.user.userId]
+      [req.params.id, ORG_USER_ID]
     );
     
     if (result.rows.length === 0) {

@@ -580,17 +580,21 @@ function FieldsModule({ user, onLogout }) {
             <div className="section-header">
               <h2>🌱 Your Fields</h2>
               <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <button
-                  className="action-btn jd-btn"
-                  onClick={handleSyncFieldsFromJD}
-                  disabled={syncingFieldsJD}
-                  title="Sync field list from John Deere Operations Center"
-                >
-                  {syncingFieldsJD ? '⏳ Syncing...' : '🚜 Sync fields from John Deere'}
-                </button>
-                <button className="add-button" onClick={() => setShowAddField(true)}>
-                  + Add Field
-                </button>
+                {user?.isAdmin && (
+                  <>
+                    <button
+                      className="action-btn jd-btn"
+                      onClick={handleSyncFieldsFromJD}
+                      disabled={syncingFieldsJD}
+                      title="Sync field list from John Deere Operations Center"
+                    >
+                      {syncingFieldsJD ? '⏳ Syncing...' : '🚜 Sync fields from John Deere'}
+                    </button>
+                    <button className="add-button" onClick={() => setShowAddField(true)}>
+                      + Add Field
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             {syncFieldsMessage && (
@@ -660,9 +664,11 @@ function FieldsModule({ user, onLogout }) {
               <button className="back-button" onClick={() => setView('list')}>
                 ← Back to Fields
               </button>
-              <button className="delete-field-btn" onClick={() => handleDeleteField(selectedField.id)}>
-                🗑️ Delete Field
-              </button>
+              {user?.isAdmin && (
+                <button className="delete-field-btn" onClick={() => handleDeleteField(selectedField.id)}>
+                  🗑️ Delete Field
+                </button>
+              )}
             </div>
             
             <div className="field-detail-header">
@@ -676,9 +682,11 @@ function FieldsModule({ user, onLogout }) {
             <div className="years-section">
               <div className="section-header">
                 <h3>Select Growing Season</h3>
-                <button className="add-button" onClick={() => setShowAddYear(true)}>
-                  + Add Year
-                </button>
+                {user?.isAdmin && (
+                  <button className="add-button" onClick={() => setShowAddYear(true)}>
+                    + Add Year
+                  </button>
+                )}
               </div>
 
               {years.length === 0 ? (
@@ -733,17 +741,21 @@ function FieldsModule({ user, onLogout }) {
                   ))}
                 </select>
                 
-                <button 
-                  className="add-year-btn" 
-                  onClick={() => setShowCustomYear(true)}
-                >
-                  + Add Year
-                </button>
+                {user?.isAdmin && (
+                  <button 
+                    className="add-year-btn" 
+                    onClick={() => setShowCustomYear(true)}
+                  >
+                    + Add Year
+                  </button>
+                )}
               </div>
               
-              <button className="manage-field-btn" onClick={() => setShowManageField(true)}>
-                ⚙️ Manage Field
-              </button>
+              {user?.isAdmin && (
+                <button className="manage-field-btn" onClick={() => setShowManageField(true)}>
+                  ⚙️ Manage Field
+                </button>
+              )}
             </div>
             
             <div className="year-overview-card">
@@ -755,9 +767,11 @@ function FieldsModule({ user, onLogout }) {
                     {yearDetails.variety && ` • ${yearDetails.variety}`}
                   </p>
                 </div>
-                <button className="edit-btn" onClick={() => setShowEditYear(true)}>
-                  ✏️ Edit
-                </button>
+                {user?.isAdmin && (
+                  <button className="edit-btn" onClick={() => setShowEditYear(true)}>
+                    ✏️ Edit
+                  </button>
+                )}
               </div>
 
               <div className="year-stats-grid">
@@ -793,20 +807,24 @@ function FieldsModule({ user, onLogout }) {
             </div>
 
             <div className="action-buttons-grid">
-              <button className="action-btn jd-btn" onClick={handleSyncFromJohnDeere}>
-                🚜 Sync from John Deere
-              </button>
-              <button className="action-btn" onClick={() => setShowUploadSoil(true)}>
-                🧪 Upload Soil Report
-              </button>
-              <button className="action-btn" onClick={() => setShowUploadTissue(true)}>
-                🌿 Upload Tissue Report
-              </button>
+              {user?.isAdmin && (
+                <>
+                  <button className="action-btn jd-btn" onClick={handleSyncFromJohnDeere}>
+                    🚜 Sync from John Deere
+                  </button>
+                  <button className="action-btn" onClick={() => setShowUploadSoil(true)}>
+                    🧪 Upload Soil Report
+                  </button>
+                  <button className="action-btn" onClick={() => setShowUploadTissue(true)}>
+                    🌿 Upload Tissue Report
+                  </button>
+                  <button className="action-btn" onClick={() => setShowUploadYield(true)}>
+                    📊 Upload Yield Map
+                  </button>
+                </>
+              )}
               <button className="action-btn" onClick={() => setShowAddScouting(true)}>
                 📝 Add Scouting Note
-              </button>
-              <button className="action-btn" onClick={() => setShowUploadYield(true)}>
-                📊 Upload Yield Map
               </button>
             </div>
 

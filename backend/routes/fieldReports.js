@@ -3,6 +3,8 @@ const router = express.Router();
 const multer = require('multer');
 const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
+const requireAdmin = require('../middleware/requireAdmin');
+const { ORG_USER_ID } = require('../config/org');
 
 router.use(authMiddleware);
 
@@ -28,7 +30,7 @@ router.get('/:fieldName/:year', async (req, res) => {
        FROM field_reports 
        WHERE user_id = $1 AND field_name = $2 AND year = $3
        ORDER BY report_date DESC`,
-      [req.user.userId, req.params.fieldName, req.params.year]
+      [ORG_USER_ID, req.params.fieldName, req.params.year]
     );
     res.json(result.rows);
   } catch (error) {
@@ -44,7 +46,7 @@ router.get('/:fieldName/years', async (req, res) => {
       `SELECT DISTINCT year FROM field_reports 
        WHERE user_id = $1 AND field_name = $2
        ORDER BY year DESC`,
-      [req.user.userId, req.params.fieldName]
+      [ORG_USER_ID, req.params.fieldName]
     );
     res.json(result.rows.map(r => r.year));
   } catch (error) {
@@ -58,7 +60,7 @@ router.get('/download/:id', async (req, res) => {
   try {
     const result = await db.query(
       'SELECT file_data, file_name, file_type FROM field_reports WHERE id = $1 AND user_id = $2',
-      [req.params.id, req.user.userId]
+      [req.params.id, ORG_USER_ID]
     );
     
     if (result.rows.length === 0) {
@@ -94,7 +96,7 @@ router.post('/', upload.single('file'), async (req, res) => {
     const result = await db.query(
       `INSERT INTO field_reports (user_id, field_name, year, report_type, report_date, file_data, file_name, file_type, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, field_name, year, report_type, report_date, file_name, file_type, notes, created_at`,
-      [req.user.userId, fieldName, year, reportType, reportDate, fileData, fileName, fileType, notes]
+      [ORG_USER_ID, fieldName, year, reportType, reportDate, fileData, fileName, fileType, notes]
     );
     
     res.status(201).json(result.rows[0]);
@@ -104,12 +106,12 @@ router.post('/', upload.single('file'), async (req, res) => {
   }
 });
 
-// Delete report
-router.delete('/:id', async (req, res) => {
+// Delete report (admin only)
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const result = await db.query(
       'DELETE FROM field_reports WHERE id = $1 AND user_id = $2 RETURNING *',
-      [req.params.id, req.user.userId]
+      [req.params.id, ORG_USER_ID]
     );
     
     if (result.rows.length === 0) {

@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
+const requireAdmin = require('../middleware/requireAdmin');
+const { ORG_USER_ID } = require('../config/org');
 const multer = require('multer');
 
 router.use(authMiddleware);
-
-const userId = 1;
 
 // In-memory storage for multipart (receipts). For production you might use disk or S3.
 const upload = multer({
@@ -30,7 +30,7 @@ router.get('/:assetId/maintenance', async (req, res) => {
       `SELECT * FROM equipment_maintenance 
        WHERE equipment_asset_id = $1 AND user_id = $2 
        ORDER BY service_date DESC`,
-      [req.params.assetId, userId]
+      [req.params.assetId, ORG_USER_ID]
     );
     res.json(result.rows);
   } catch (error) {
@@ -51,7 +51,7 @@ router.post('/:assetId/maintenance', upload.single('receipt'), async (req, res) 
         cost, hours_at_service, receipt_data, receipt_name, receipt_type
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
       [
-        userId,
+        ORG_USER_ID,
         req.params.assetId,
         serviceDate,
         serviceType || 'Service',
@@ -68,7 +68,7 @@ router.post('/:assetId/maintenance', upload.single('receipt'), async (req, res) 
     if (hoursAtService) {
       await db.query(
         'UPDATE equipment_assets SET current_hours = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
-        [parseFloat(hoursAtService), req.params.assetId, userId]
+        [parseFloat(hoursAtService), req.params.assetId, ORG_USER_ID]
       );
     }
 
@@ -84,7 +84,7 @@ router.delete('/:assetId/maintenance/:id', async (req, res) => {
   try {
     const result = await db.query(
       'DELETE FROM equipment_maintenance WHERE id = $1 AND equipment_asset_id = $2 AND user_id = $3 RETURNING *',
-      [req.params.id, req.params.assetId, userId]
+      [req.params.id, req.params.assetId, ORG_USER_ID]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Maintenance record not found' });
@@ -101,7 +101,7 @@ router.get('/:assetId/maintenance/:id/receipt', async (req, res) => {
   try {
     const result = await db.query(
       'SELECT receipt_data, receipt_name, receipt_type FROM equipment_maintenance WHERE id = $1 AND equipment_asset_id = $2 AND user_id = $3',
-      [req.params.id, req.params.assetId, userId]
+      [req.params.id, req.params.assetId, ORG_USER_ID]
     );
     if (result.rows.length === 0 || !result.rows[0].receipt_data) {
       return res.status(404).json({ error: 'Receipt not found' });
@@ -124,7 +124,7 @@ router.get('/:assetId/schedule', async (req, res) => {
     const result = await db.query(
       `SELECT * FROM equipment_maintenance_schedule 
        WHERE equipment_asset_id = $1 AND user_id = $2 ORDER BY next_due_hours ASC NULLS LAST, next_due_date ASC NULLS LAST`,
-      [req.params.assetId, userId]
+      [req.params.assetId, ORG_USER_ID]
     );
     res.json(result.rows);
   } catch (error) {
@@ -152,7 +152,7 @@ router.post('/:assetId/schedule', async (req, res) => {
         last_done_date, last_done_hours, next_due_date, next_due_hours, notes
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
       [
-        userId,
+        ORG_USER_ID,
         req.params.assetId,
         taskName || 'Task',
         intervalHours ? parseFloat(intervalHours) : null,
@@ -199,7 +199,7 @@ router.put('/:assetId/schedule/:id', async (req, res) => {
       [
         req.params.id,
         req.params.assetId,
-        userId,
+        ORG_USER_ID,
         taskName,
         intervalHours != null ? parseFloat(intervalHours) : null,
         intervalDays != null ? parseInt(intervalDays) : null,
@@ -224,7 +224,7 @@ router.delete('/:assetId/schedule/:id', async (req, res) => {
   try {
     const result = await db.query(
       'DELETE FROM equipment_maintenance_schedule WHERE id = $1 AND equipment_asset_id = $2 AND user_id = $3 RETURNING *',
-      [req.params.id, req.params.assetId, userId]
+      [req.params.id, req.params.assetId, ORG_USER_ID]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Schedule item not found' });
@@ -242,7 +242,7 @@ router.get('/:assetId/parts', async (req, res) => {
   try {
     const result = await db.query(
       'SELECT * FROM equipment_parts WHERE equipment_asset_id = $1 AND user_id = $2 ORDER BY part_name',
-      [req.params.assetId, userId]
+      [req.params.assetId, ORG_USER_ID]
     );
     res.json(result.rows);
   } catch (error) {
@@ -258,7 +258,7 @@ router.post('/:assetId/parts', async (req, res) => {
       `INSERT INTO equipment_parts (user_id, equipment_asset_id, part_name, part_number, quantity, location, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
-        userId,
+        ORG_USER_ID,
         req.params.assetId,
         partName || 'Part',
         partNumber || null,
@@ -289,7 +289,7 @@ router.put('/:assetId/parts/:id', async (req, res) => {
       [
         req.params.id,
         req.params.assetId,
-        userId,
+        ORG_USER_ID,
         partName,
         partNumber,
         quantity != null ? parseInt(quantity) : null,
@@ -311,7 +311,7 @@ router.delete('/:assetId/parts/:id', async (req, res) => {
   try {
     const result = await db.query(
       'DELETE FROM equipment_parts WHERE id = $1 AND equipment_asset_id = $2 AND user_id = $3 RETURNING *',
-      [req.params.id, req.params.assetId, userId]
+      [req.params.id, req.params.assetId, ORG_USER_ID]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Part not found' });
@@ -329,7 +329,7 @@ router.get('/:assetId/fuel', async (req, res) => {
   try {
     const result = await db.query(
       'SELECT * FROM equipment_fuel_logs WHERE equipment_asset_id = $1 AND user_id = $2 ORDER BY fuel_date DESC',
-      [req.params.assetId, userId]
+      [req.params.assetId, ORG_USER_ID]
     );
     res.json(result.rows);
   } catch (error) {
@@ -345,7 +345,7 @@ router.post('/:assetId/fuel', async (req, res) => {
       `INSERT INTO equipment_fuel_logs (user_id, equipment_asset_id, fuel_date, gallons, cost, hours_at_fill, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
-        userId,
+        ORG_USER_ID,
         req.params.assetId,
         fuelDate,
         gallons ? parseFloat(gallons) : 0,
@@ -365,7 +365,7 @@ router.delete('/:assetId/fuel/:id', async (req, res) => {
   try {
     const result = await db.query(
       'DELETE FROM equipment_fuel_logs WHERE id = $1 AND equipment_asset_id = $2 AND user_id = $3 RETURNING *',
-      [req.params.id, req.params.assetId, userId]
+      [req.params.id, req.params.assetId, ORG_USER_ID]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Fuel log not found' });
@@ -385,7 +385,7 @@ router.get('/:assetId/operators', async (req, res) => {
       `SELECT * FROM equipment_operators 
        WHERE equipment_asset_id = $1 AND user_id = $2 
        ORDER BY is_primary DESC, assigned_from DESC`,
-      [req.params.assetId, userId]
+      [req.params.assetId, ORG_USER_ID]
     );
     res.json(result.rows);
   } catch (error) {
@@ -401,7 +401,7 @@ router.post('/:assetId/operators', async (req, res) => {
       `INSERT INTO equipment_operators (user_id, equipment_asset_id, operator_name, assigned_from, assigned_to, is_primary, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
-        userId,
+        ORG_USER_ID,
         req.params.assetId,
         operatorName || 'Operator',
         assignedFrom || new Date().toISOString().split('T')[0],
@@ -421,7 +421,7 @@ router.delete('/:assetId/operators/:id', async (req, res) => {
   try {
     const result = await db.query(
       'DELETE FROM equipment_operators WHERE id = $1 AND equipment_asset_id = $2 AND user_id = $3 RETURNING *',
-      [req.params.id, req.params.assetId, userId]
+      [req.params.id, req.params.assetId, ORG_USER_ID]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Operator not found' });

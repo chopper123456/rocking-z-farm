@@ -27,9 +27,14 @@ function App() {
     setLoading(false);
   }, []);
 
-  const handleLogin = (token, userData) => {
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userData));
+  const handleLogin = (token, userData, rememberMe = false) => {
+    if (rememberMe) {
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
+    } else {
+      sessionStorage.setItem('token', token);
+      sessionStorage.setItem('user', JSON.stringify(userData));
+    }
     setIsAuthenticated(true);
     setUser(userData);
   };
@@ -37,6 +42,8 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
     setIsAuthenticated(false);
     setUser(null);
   };
@@ -79,7 +86,7 @@ function App() {
           path="/admin"
           element={
             isAuthenticated ? 
-            <AdminPanel user={user} onLogout={handleLogout} /> : 
+            (user?.isAdmin ? <AdminPanel user={user} onLogout={handleLogout} /> : <Navigate to="/" replace />) : 
             <Navigate to="/login" replace />
           }
         />
@@ -87,7 +94,7 @@ function App() {
           path="/john-deere"
           element={
             isAuthenticated ? 
-            <JohnDeereIntegration user={user} onLogout={handleLogout} /> : 
+            (user?.isAdmin ? <JohnDeereIntegration user={user} onLogout={handleLogout} /> : <Navigate to="/" replace />) : 
             <Navigate to="/login" replace />
           }
         />

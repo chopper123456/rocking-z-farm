@@ -3,16 +3,17 @@ const router = express.Router();
 const axios = require('axios');
 const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
+const requireAdmin = require('../middleware/requireAdmin');
+const { ORG_USER_ID } = require('../config/org');
 
 router.use(authMiddleware);
 
-const userId = 1;
 const JD_API_URL = 'https://sandboxapi.deere.com/platform';
 
 async function getJDAccess() {
   const tokenResult = await db.query(
     'SELECT access_token FROM john_deere_tokens WHERE user_id = $1',
-    [userId]
+    [ORG_USER_ID]
   );
   if (tokenResult.rows.length === 0) {
     return { error: 'John Deere not connected' };
@@ -40,8 +41,8 @@ async function getJDAccess() {
   return { accessToken, orgId: enabledOrg.id };
 }
 
-// Sync fields and farms from John Deere into our fields table
-router.post('/sync', async (req, res) => {
+// Sync fields and farms from John Deere (admin only)
+router.post('/sync', requireAdmin, async (req, res) => {
   try {
     const jd = await getJDAccess();
     if (jd.error) {
@@ -99,13 +100,13 @@ router.post('/sync', async (req, res) => {
 
           const existingByJd = await db.query(
             'SELECT id FROM fields WHERE user_id = $1 AND jd_field_id = $2',
-            [userId, String(jdFieldId)]
+            [ORG_USER_ID, String(jdFieldId)]
           );
           const existing = existingByJd.rows.length > 0
             ? existingByJd
             : await db.query(
                 'SELECT id FROM fields WHERE user_id = $1 AND LOWER(TRIM(field_name)) = LOWER(TRIM($2))',
-                [userId, fieldName]
+                [ORG_USER_ID, fieldName]
               );
 
           if (existing.rows.length > 0) {
@@ -117,7 +118,7 @@ router.post('/sync', async (req, res) => {
           } else {
             await db.query(
               `INSERT INTO fields (user_id, field_name, acreage, jd_field_id, jd_farm_id, farm_name) VALUES ($1, $2, $3, $4, $5, $6)`,
-              [userId, fieldName, acreage, String(jdFieldId), jdFarmId ? String(jdFarmId) : null, farmName]
+              [ORG_USER_ID, fieldName, acreage, String(jdFieldId), jdFarmId ? String(jdFarmId) : null, farmName]
             );
             fieldsAdded++;
           }

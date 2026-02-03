@@ -16,7 +16,8 @@ function AdminPanel({ user, onLogout }) {
     username: '',
     email: '',
     password: '',
-    fullName: ''
+    fullName: '',
+    role: 'team',
   });
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -34,7 +35,7 @@ function AdminPanel({ user, onLogout }) {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       const response = await axios.get(`${API_URL}/auth/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -76,7 +77,7 @@ function AdminPanel({ user, onLogout }) {
       });
       
       setShowAddUser(false);
-      setNewUser({ username: '', email: '', password: '', fullName: '' });
+      setNewUser({ username: '', email: '', password: '', fullName: '', role: 'team' });
       loadUsers();
       alert('Employee account created successfully!');
     } catch (error) {
@@ -93,7 +94,7 @@ function AdminPanel({ user, onLogout }) {
     if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       await axios.patch(`${API_URL}/auth/users/${userId}/toggle-active`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -115,7 +116,7 @@ function AdminPanel({ user, onLogout }) {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       await axios.post(`${API_URL}/auth/users/${userId}/reset-password`, 
         { newPassword },
         { headers: { Authorization: `Bearer ${token}` } }
@@ -172,10 +173,10 @@ function AdminPanel({ user, onLogout }) {
                   <tr key={u.id} className={!u.is_active ? 'inactive' : ''}>
                     <td>{u.username}</td>
                     <td>{u.email}</td>
-                    <td>{u.farm_name || '-'}</td>
+                    <td>{u.full_name || u.farm_name || '-'}</td>
                     <td>
-                      <span className={`role-badge ${u.is_admin ? 'admin' : 'user'}`}>
-                        {u.is_admin ? 'Admin' : 'Employee'}
+                      <span className={`role-badge ${u.is_admin ? 'admin' : 'team'}`}>
+                        {u.is_admin ? 'Admin' : 'Team'}
                       </span>
                     </td>
                     <td>
@@ -249,6 +250,16 @@ function AdminPanel({ user, onLogout }) {
                     onChange={(e) => setNewUser({...newUser, fullName: e.target.value})}
                     placeholder="John Doe"
                   />
+                </div>
+                <div className="form-group">
+                  <label>Role *</label>
+                  <select
+                    value={newUser.role}
+                    onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                  >
+                    <option value="team">Team</option>
+                    <option value="admin">Admin</option>
+                  </select>
                 </div>
                 <div className="form-group">
                   <label>Password * (min 8 characters)</label>
