@@ -18,16 +18,15 @@ export default defineConfig({
         orientation: 'portrait-primary',
         scope: '/',
         start_url: '/',
+        // Single data-URL icon so manifest works without /icons/ files; add PNGs to public/icons/ for better install icon
         icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/icons/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
-          { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+          { src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', sizes: '512x512', type: 'image/png', purpose: 'any' }
         ],
         categories: ['business', 'productivity'],
         shortcuts: [
-          { name: 'Fields', short_name: 'Fields', url: '/fields', icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }] },
-          { name: 'Equipment', short_name: 'Equipment', url: '/equipment', icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }] }
+          { name: 'Fields', short_name: 'Fields', url: '/fields' },
+          { name: 'Equipment', short_name: 'Equipment', url: '/equipment' }
         ]
       },
       workbox: {
