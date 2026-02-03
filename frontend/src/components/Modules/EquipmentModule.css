@@ -22,6 +22,35 @@
   margin: 0;
 }
 
+.equipment-module .equipment-list-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.equipment-module .equipment-list-controls .search-bar {
+  flex: 1;
+  min-width: 200px;
+}
+
+.equipment-module .active-only-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: #333;
+  user-select: none;
+}
+
+.equipment-module .active-only-toggle input {
+  width: 1.1rem;
+  height: 1.1rem;
+  cursor: pointer;
+}
+
 .equipment-module .add-button,
 .equipment-module .back-button,
 .equipment-module .edit-btn,

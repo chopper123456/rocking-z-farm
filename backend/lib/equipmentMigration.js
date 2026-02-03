@@ -32,6 +32,21 @@ async function runEquipmentMigration(db) {
   await db.query(`CREATE INDEX IF NOT EXISTS idx_equipment_assets_user ON equipment_assets(user_id);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_equipment_assets_jd ON equipment_assets(jd_asset_id);`);
 
+  // Add is_active for "active equipment" filter (from JD Connections)
+  await db.query(`
+    ALTER TABLE equipment_assets ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+  `);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_equipment_assets_active ON equipment_assets(is_active);`);
+
+  // Fields table: JD link columns (add if table exists from initDatabase)
+  try {
+    await db.query(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS jd_field_id VARCHAR(255);`);
+    await db.query(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS jd_farm_id VARCHAR(255);`);
+    await db.query(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS farm_name VARCHAR(255);`);
+  } catch (e) {
+    // fields table may not exist yet
+  }
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS equipment_maintenance (
       id SERIAL PRIMARY KEY,

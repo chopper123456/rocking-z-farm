@@ -9,6 +9,38 @@ router.use(authMiddleware);
 const userId = 1;
 const JD_API_URL = 'https://sandboxapi.deere.com/platform';
 
+// Fetch connected machine/asset IDs from JD Connections API and update equipment_assets.is_active
+async function updateActiveFromConnections(accessToken) {
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: 'application/vnd.deere.axiom.v3+json',
+  };
+  let connectedIds = [];
+  try {
+    const res = await axios.get(`${JD_API_URL}/connections`, { headers });
+    const list = res.data.values || res.data.members || res.data || [];
+    const arr = Array.isArray(list) ? list : [list];
+    for (const item of arr) {
+      const id = item.id ?? item.assetId ?? item.machineId ?? item.principalId ?? item['@id'];
+      if (id) connectedIds.push(String(id));
+    }
+  } catch (err) {
+    if (err.response?.status !== 404 && err.response?.status !== 403) {
+      console.error('Connections API error:', err.response?.status, err.response?.data);
+    }
+    return;
+  }
+  if (connectedIds.length === 0) return;
+  await db.query(
+    'UPDATE equipment_assets SET is_active = (jd_asset_id = ANY($1::text[])) WHERE user_id = $2 AND jd_asset_id IS NOT NULL',
+    [connectedIds, userId]
+  );
+  await db.query(
+    'UPDATE equipment_assets SET is_active = true WHERE user_id = $1 AND jd_asset_id IS NULL',
+    [userId]
+  );
+}
+
 // Get John Deere access token and enabled org (shared helper)
 async function getJDAccess() {
   const tokenResult = await db.query(
@@ -135,6 +167,7 @@ router.post('/sync', async (req, res) => {
     }
 
     if (totalFetched > 0) {
+      await updateActiveFromConnections(accessToken);
       return res.json({
         message: `Synced equipment from John Deere. ${assetsAdded} new asset(s) added, ${totalFetched} total from JD.`,
         assetsAdded,
@@ -217,6 +250,7 @@ router.post('/sync', async (req, res) => {
       }
 
       if (totalFetched > 0) {
+        await updateActiveFromConnections(accessToken);
         return res.json({
           message: `Synced equipment from John Deere. ${assetsAdded} new asset(s) added, ${totalFetched} total from JD.`,
           assetsAdded,
@@ -284,26 +318,38 @@ router.post('/sync-hours/:assetId', async (req, res) => {
 
     const { accessToken } = jd;
     let hours = null;
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/vnd.deere.axiom.v3+json',
+    };
 
-    // Try telemetry/usage endpoint (JD API may expose hours per asset)
+    // Try platform engine hours endpoint first: GET /machines/{id}/engineHours
     try {
-      const url = `${JD_API_URL}/organizations/${jd.orgId}/assets/${jdAssetId}`;
-      const response = await axios.get(url, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/vnd.deere.axiom.v3+json',
-        },
-      });
+      const url = `${JD_API_URL}/machines/${jdAssetId}/engineHours`;
+      const response = await axios.get(url, { headers });
       const data = response.data;
-      hours = data.totalEngineHours ?? data.engineHours ?? data.hours ?? data.meter ?? null;
-      if (hours != null) {
-        await db.query(
-          'UPDATE equipment_assets SET current_hours = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-          [parseFloat(hours), req.params.assetId]
-        );
-      }
+      hours = data.totalEngineHours ?? data.engineHours ?? data.hours ?? data.value ?? (data.values && data.values[0] && (data.values[0].hours ?? data.values[0].value)) ?? null;
     } catch (err) {
-      // Telemetry endpoint might not exist in sandbox
+      // continue to fallback
+    }
+
+    // Fallback: organizations/assets endpoint
+    if (hours == null) {
+      try {
+        const url = `${JD_API_URL}/organizations/${jd.orgId}/assets/${jdAssetId}`;
+        const response = await axios.get(url, { headers });
+        const data = response.data;
+        hours = data.totalEngineHours ?? data.engineHours ?? data.hours ?? data.meter ?? null;
+      } catch (err) {
+        // Telemetry endpoint might not exist in sandbox
+      }
+    }
+
+    if (hours != null) {
+      await db.query(
+        'UPDATE equipment_assets SET current_hours = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [parseFloat(hours), req.params.assetId]
+      );
     }
 
     // Update john_deere_equipment cache
@@ -378,6 +424,122 @@ router.get('/field-usage', async (req, res) => {
   } catch (error) {
     console.error('Error fetching field usage:', error);
     res.status(500).json({ error: 'Error fetching field usage' });
+  }
+});
+
+// John Deere Connections: list of connected (active) machine/asset IDs
+router.get('/connections', async (req, res) => {
+  try {
+    const jd = await getJDAccess();
+    if (jd.error) {
+      return res.status(400).json({ error: jd.error, connectedAssetIds: [] });
+    }
+    const headers = {
+      Authorization: `Bearer ${jd.accessToken}`,
+      Accept: 'application/vnd.deere.axiom.v3+json',
+    };
+    const resJd = await axios.get(`${JD_API_URL}/connections`, { headers });
+    const list = resJd.data.values || resJd.data.members || resJd.data || [];
+    const arr = Array.isArray(list) ? list : [list];
+    const connectedAssetIds = [];
+    for (const item of arr) {
+      const id = item.id ?? item.assetId ?? item.machineId ?? item.principalId ?? item['@id'];
+      if (id) connectedAssetIds.push(String(id));
+    }
+    res.json({ connectedAssetIds });
+  } catch (error) {
+    if (error.response?.status === 404 || error.response?.status === 403) {
+      return res.json({ connectedAssetIds: [] });
+    }
+    console.error('Connections error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to fetch connections', connectedAssetIds: [] });
+  }
+});
+
+// JD machine data: hours of operation (view hours of operation for machines)
+router.get('/machines/:jdAssetId/hours-of-operation', async (req, res) => {
+  try {
+    const jd = await getJDAccess();
+    if (jd.error) return res.status(400).json({ error: jd.error });
+    const url = `${JD_API_URL}/machines/${req.params.jdAssetId}/hoursOfOperation`;
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${jd.accessToken}`,
+        Accept: 'application/vnd.deere.axiom.v3+json',
+      },
+    });
+    res.json(response.data);
+  } catch (error) {
+    if (error.response?.status === 404) return res.json({ values: [] });
+    console.error('Hours of operation error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({ error: error.response?.data?.message || 'Failed to fetch hours of operation' });
+  }
+});
+
+// JD machine data: engine hours
+router.get('/machines/:jdAssetId/engine-hours', async (req, res) => {
+  try {
+    const jd = await getJDAccess();
+    if (jd.error) return res.status(400).json({ error: jd.error });
+    const url = `${JD_API_URL}/machines/${req.params.jdAssetId}/engineHours`;
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${jd.accessToken}`,
+        Accept: 'application/vnd.deere.axiom.v3+json',
+      },
+    });
+    res.json(response.data);
+  } catch (error) {
+    if (error.response?.status === 404) return res.json({ engineHours: null });
+    console.error('Engine hours error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({ error: error.response?.data?.message || 'Failed to fetch engine hours' });
+  }
+});
+
+// JD machine data: DTC alerts
+router.get('/machines/:jdAssetId/alerts', async (req, res) => {
+  try {
+    const jd = await getJDAccess();
+    if (jd.error) return res.status(400).json({ error: jd.error });
+    const url = `${JD_API_URL}/machines/${req.params.jdAssetId}/alerts`;
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${jd.accessToken}`,
+        Accept: 'application/vnd.deere.axiom.v3+json',
+      },
+    });
+    res.json(response.data);
+  } catch (error) {
+    if (error.response?.status === 404) return res.json({ values: [], alerts: [] });
+    console.error('Alerts error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({ error: error.response?.data?.message || 'Failed to fetch alerts' });
+  }
+});
+
+// JD operators in organization
+router.get('/operators', async (req, res) => {
+  try {
+    const jd = await getJDAccess();
+    if (jd.error) return res.status(400).json({ error: jd.error });
+    let nextUrl = `${JD_API_URL}/organizations/${jd.orgId}/operators`;
+    const operators = [];
+    const headers = {
+      Authorization: `Bearer ${jd.accessToken}`,
+      Accept: 'application/vnd.deere.axiom.v3+json',
+    };
+    while (nextUrl) {
+      const response = await axios.get(nextUrl, { headers });
+      const list = response.data.values || response.data.members || response.data || [];
+      const arr = Array.isArray(list) ? list : [list];
+      operators.push(...arr);
+      const nextLink = response.data.links?.find((l) => l.rel === 'nextPage' || l.rel === 'next');
+      nextUrl = nextLink?.uri || null;
+    }
+    res.json(operators);
+  } catch (error) {
+    if (error.response?.status === 404) return res.json([]);
+    console.error('Operators error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({ error: error.response?.data?.message || 'Failed to fetch operators' });
   }
 });
 

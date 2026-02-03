@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Header from '../Layout/Header';
 import axios from 'axios';
+import { equipmentAPI, equipmentJDAPI } from '../../utils/api';
 import './EquipmentModule.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -32,6 +33,11 @@ function EquipmentModule({ user, onLogout }) {
 
   const [syncingJD, setSyncingJD] = useState(false);
   const [syncMessage, setSyncMessage] = useState(null);
+  const [activeOnly, setActiveOnly] = useState(true);
+
+  const [jdHoursOfOperation, setJdHoursOfOperation] = useState(null);
+  const [jdMachineAlerts, setJdMachineAlerts] = useState(null);
+  const [jdDataLoading, setJdDataLoading] = useState(false);
 
   const [showAddEquipment, setShowAddEquipment] = useState(false);
   const [showEditEquipment, setShowEditEquipment] = useState(false);
@@ -104,7 +110,9 @@ function EquipmentModule({ user, onLogout }) {
   useEffect(() => {
     loadEquipment();
     loadAlerts();
-  }, []);
+    // Auto-sync from John Deere on page load (silent background sync)
+    handleSyncFromJD(true);
+  }, [activeOnly]);
 
   useEffect(() => {
     if (selectedAsset) {
@@ -112,10 +120,29 @@ function EquipmentModule({ user, onLogout }) {
     }
   }, [selectedAsset]);
 
+  useEffect(() => {
+    if (selectedAsset?.jd_asset_id) {
+      setJdDataLoading(true);
+      setJdHoursOfOperation(null);
+      setJdMachineAlerts(null);
+      Promise.all([
+        equipmentJDAPI.hoursOfOperation(selectedAsset.jd_asset_id).then((r) => r.data).catch(() => null),
+        equipmentJDAPI.machineAlerts(selectedAsset.jd_asset_id).then((r) => r.data).catch(() => null),
+      ]).then(([hours, alerts]) => {
+        setJdHoursOfOperation(hours);
+        setJdMachineAlerts(alerts);
+        setJdDataLoading(false);
+      }).catch(() => setJdDataLoading(false));
+    } else {
+      setJdHoursOfOperation(null);
+      setJdMachineAlerts(null);
+    }
+  }, [selectedAsset?.jd_asset_id]);
+
   const loadEquipment = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_URL}/equipment`, { headers: headers() });
+      const res = await equipmentAPI.getAll({ activeOnly: activeOnly });
       setEquipment(res.data);
     } catch (err) {
       console.error(err);
@@ -294,21 +321,25 @@ function EquipmentModule({ user, onLogout }) {
     }
   };
 
-  const handleSyncFromJD = async () => {
+  const handleSyncFromJD = async (silent = false) => {
     setSyncingJD(true);
-    setSyncMessage(null);
+    if (!silent) setSyncMessage(null);
     try {
       const res = await axios.post(`${API_URL}/equipment-jd/sync`, {}, { headers: headers() });
       loadEquipment();
       loadAlerts();
       const msg = res.data.message || 'Sync complete.';
-      setSyncMessage(msg);
-      alert(msg);
+      if (!silent) {
+        setSyncMessage(msg);
+        alert(msg);
+      }
     } catch (err) {
       console.error(err);
       const errMsg = err.response?.data?.error || err.message || 'Failed to sync from John Deere.';
-      setSyncMessage(errMsg);
-      alert(errMsg);
+      if (!silent) {
+        setSyncMessage(errMsg);
+        alert(errMsg);
+      }
     } finally {
       setSyncingJD(false);
     }
@@ -402,13 +433,23 @@ function EquipmentModule({ user, onLogout }) {
               </div>
             )}
 
-            <div className="search-bar">
-              <input
-                type="text"
-                placeholder="🔍 Search equipment..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+            <div className="equipment-list-controls">
+              <div className="search-bar">
+                <input
+                  type="text"
+                  placeholder="🔍 Search equipment..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <label className="active-only-toggle">
+                <input
+                  type="checkbox"
+                  checked={activeOnly}
+                  onChange={(e) => setActiveOnly(e.target.checked)}
+                />
+                <span>Active only</span>
+              </label>
             </div>
 
             {loading ? (
@@ -518,6 +559,37 @@ function EquipmentModule({ user, onLogout }) {
                   </div>
                 </div>
                 {selectedAsset.notes && <p style={{ color: '#666', marginTop: '1rem' }}>{selectedAsset.notes}</p>}
+
+                {selectedAsset.jd_asset_id && (
+                  <div className="jd-data-sections" style={{ marginTop: '1.5rem', borderTop: '1px solid #eee', paddingTop: '1rem' }}>
+                    <h4 style={{ marginBottom: '0.75rem', color: 'var(--earth-mid)' }}>🚜 John Deere Data</h4>
+                    {jdDataLoading && <p style={{ color: '#666' }}>Loading…</p>}
+                    {!jdDataLoading && jdHoursOfOperation != null && (
+                      <div className="equipment-subsection" style={{ marginBottom: '1rem' }}>
+                        <h5>Hours of operation</h5>
+                        <pre style={{ fontSize: '0.85rem', overflow: 'auto', maxHeight: '120px', background: '#f8f8f8', padding: '0.75rem', borderRadius: 8 }}>
+                          {JSON.stringify(jdHoursOfOperation, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                    {!jdDataLoading && jdMachineAlerts != null && (
+                      <div className="equipment-subsection">
+                        <h5>Machine alerts (DTC)</h5>
+                        {(jdMachineAlerts.values && jdMachineAlerts.values.length > 0) || (jdMachineAlerts.alerts && jdMachineAlerts.alerts.length > 0) ? (
+                          <ul style={{ listStyle: 'none', padding: 0 }}>
+                            {(jdMachineAlerts.values || jdMachineAlerts.alerts || []).map((a, i) => (
+                              <li key={i} style={{ padding: '0.5rem 0', borderBottom: '1px solid #eee' }}>
+                                {a.description ?? a.message ?? a.code ?? JSON.stringify(a)}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p style={{ color: '#666' }}>No active alerts.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

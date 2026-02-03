@@ -76,6 +76,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/john-deere', require('./routes/johnDeere'));
 app.use('/api/livestock', require('./routes/livestock'));
 app.use('/api/fields', require('./routes/fields'));
+app.use('/api/fields-jd', require('./routes/fieldsJDSync'));
 app.use('/api/field-years', require('./routes/fieldYears'));
 app.use('/api/field-reports', require('./routes/fieldReports'));
 app.use('/api/scouting-reports', require('./routes/scoutingReports'));

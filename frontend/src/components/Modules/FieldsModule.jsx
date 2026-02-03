@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../Layout/Header';
 import axios from 'axios';
+import { fieldsJDAPI } from '../../utils/api';
 import './FieldsModule.css';
 
 function FieldsModule({ user, onLogout }) {
@@ -25,6 +26,8 @@ function FieldsModule({ user, onLogout }) {
   const [showEditYear, setShowEditYear] = useState(false);
   const [showCustomYear, setShowCustomYear] = useState(false);
   const [showManageField, setShowManageField] = useState(false);
+  const [syncingFieldsJD, setSyncingFieldsJD] = useState(false);
+  const [syncFieldsMessage, setSyncFieldsMessage] = useState(null);
 
   const [newField, setNewField] = useState({
     fieldName: '',
@@ -77,6 +80,8 @@ function FieldsModule({ user, onLogout }) {
 
   useEffect(() => {
     loadFields();
+    // Auto-sync fields from John Deere on page load (silent background sync)
+    handleSyncFieldsFromJD(true);
   }, []);
 
   useEffect(() => {
@@ -351,6 +356,30 @@ function FieldsModule({ user, onLogout }) {
     }
   };
 
+  const handleSyncFieldsFromJD = async (silent = false) => {
+    try {
+      setSyncingFieldsJD(true);
+      if (!silent) setSyncFieldsMessage(null);
+      const response = await fieldsJDAPI.sync();
+      const msg = response.data?.message || 'Fields synced from John Deere.';
+      if (!silent) {
+        setSyncFieldsMessage(msg);
+        alert(`✅ ${msg}`);
+      }
+      await loadFields();
+    } catch (error) {
+      const errMsg = error.response?.data?.error || error.response?.data?.details || error.message || 'Failed to sync fields from John Deere.';
+      if (!silent) {
+        setSyncFieldsMessage(errMsg);
+        alert(errMsg);
+      }
+      // Silent fail on auto-sync - just log to console
+      console.error('Auto-sync from John Deere failed:', errMsg);
+    } finally {
+      setSyncingFieldsJD(false);
+    }
+  };
+
   const handleSyncFromJohnDeere = async () => {
     if (!window.confirm(`Sync operations from John Deere for ${selectedField.field_name} (${selectedYear})?\n\nThis will pull planting, spraying, tillage, and harvest operations.`)) return;
     
@@ -549,10 +578,26 @@ function FieldsModule({ user, onLogout }) {
           <>
             <div className="section-header">
               <h2>🌱 Your Fields</h2>
-              <button className="add-button" onClick={() => setShowAddField(true)}>
-                + Add Field
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <button
+                  className="action-btn jd-btn"
+                  onClick={handleSyncFieldsFromJD}
+                  disabled={syncingFieldsJD}
+                  title="Sync field list from John Deere Operations Center"
+                >
+                  {syncingFieldsJD ? '⏳ Syncing...' : '🚜 Sync fields from John Deere'}
+                </button>
+                <button className="add-button" onClick={() => setShowAddField(true)}>
+                  + Add Field
+                </button>
+              </div>
             </div>
+            {syncFieldsMessage && (
+              <div className="fields-sync-message" style={{ marginBottom: '1rem', background: '#f0f7f0', borderLeft: '4px solid var(--earth-mid)', padding: '0.75rem 1rem', borderRadius: 4 }}>
+                <p style={{ margin: 0, color: '#333' }}>{syncFieldsMessage}</p>
+                <button type="button" onClick={() => setSyncFieldsMessage(null)} style={{ marginTop: '0.5rem', fontSize: '0.9rem', background: 'none', border: 'none', color: '#666', cursor: 'pointer', textDecoration: 'underline' }}>Dismiss</button>
+              </div>
+            )}
 
             <div className="search-bar">
               <input
@@ -578,7 +623,9 @@ function FieldsModule({ user, onLogout }) {
                     <div className="field-info">
                       {field.acreage && <span>📏 {field.acreage} acres</span>}
                       {field.soil_type && <span>🌱 {field.soil_type}</span>}
+                      {field.farm_name && <span style={{ color: 'var(--earth-mid)' }}>🏠 {field.farm_name}</span>}
                     </div>
+                    {field.jd_field_id && <span className="jd-badge" style={{ fontSize: '0.75rem', color: 'var(--earth-mid)', marginTop: '0.25rem', display: 'block' }}>John Deere</span>}
                   </div>
                 ))}
               </div>

@@ -7,13 +7,19 @@ router.use(authMiddleware);
 
 const userId = 1; // Fixed for shared farm account
 
-// List all equipment assets
+// List all equipment assets (optional: ?activeOnly=true to show only JD-connected/active)
 router.get('/', async (req, res) => {
   try {
-    const result = await db.query(
-      `SELECT * FROM equipment_assets WHERE user_id = $1 ORDER BY category, name`,
-      [userId]
-    );
+    const activeOnly = req.query.activeOnly === 'true' || req.query.activeOnly === '1';
+    const result = activeOnly
+      ? await db.query(
+          `SELECT * FROM equipment_assets WHERE user_id = $1 AND (is_active IS NOT FALSE) ORDER BY category, name`,
+          [userId]
+        )
+      : await db.query(
+          `SELECT * FROM equipment_assets WHERE user_id = $1 ORDER BY category, name`,
+          [userId]
+        );
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching equipment:', error);

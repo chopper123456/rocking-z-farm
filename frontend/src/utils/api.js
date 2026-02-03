@@ -67,7 +67,7 @@ export const fieldReportsAPI = {
 
 // Equipment API (assets + maintenance, parts, fuel, operators)
 export const equipmentAPI = {
-  getAll: () => api.get('/equipment'),
+  getAll: (params) => api.get('/equipment', { params }), // params: { activeOnly: true }
   getOne: (id) => api.get(`/equipment/${id}`),
   create: (data) => api.post('/equipment', data),
   update: (id, data) => api.put(`/equipment/${id}`, data),
@@ -88,12 +88,23 @@ export const equipmentAPI = {
 export const equipmentJDAPI = {
   sync: () => api.post('/equipment-jd/sync'),
   syncHours: (assetId) => api.post(`/equipment-jd/sync-hours/${assetId}`),
+  connections: () => api.get('/equipment-jd/connections'),
   fieldUsage: () => api.get('/equipment-jd/field-usage'),
   alerts: () => api.get('/equipment-jd/alerts'),
+  hoursOfOperation: (jdAssetId) => api.get(`/equipment-jd/machines/${encodeURIComponent(jdAssetId)}/hours-of-operation`),
+  engineHours: (jdAssetId) => api.get(`/equipment-jd/machines/${encodeURIComponent(jdAssetId)}/engine-hours`),
+  machineAlerts: (jdAssetId) => api.get(`/equipment-jd/machines/${encodeURIComponent(jdAssetId)}/alerts`),
+  operators: () => api.get('/equipment-jd/operators'),
   maintenanceCosts: (year) => api.get(`/equipment-jd/reports/maintenance-costs?year=${year}`),
   fuelReport: (year) => api.get(`/equipment-jd/reports/fuel?year=${year}`),
   utilization: (params) => api.get('/equipment-jd/reports/utilization', { params }),
   depreciation: () => api.get('/equipment-jd/reports/depreciation'),
+};
+
+// Fields John Deere sync
+export const fieldsJDAPI = {
+  sync: () => api.post('/fields-jd/sync'),
+  farms: () => api.get('/fields-jd/farms'),
 };
 
 // Grain API
