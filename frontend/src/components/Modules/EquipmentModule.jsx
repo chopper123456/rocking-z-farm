@@ -36,6 +36,7 @@ function EquipmentModule({ user, onLogout }) {
   const [activeOnly, setActiveOnly] = useState(true);
 
   const [jdHoursOfOperation, setJdHoursOfOperation] = useState(null);
+  const [jdEngineHours, setJdEngineHours] = useState(null);
   const [jdMachineAlerts, setJdMachineAlerts] = useState(null);
   const [jdDataLoading, setJdDataLoading] = useState(false);
   const [equipmentTab, setEquipmentTab] = useState('all');
@@ -126,17 +127,21 @@ function EquipmentModule({ user, onLogout }) {
     if (selectedAsset?.jd_asset_id) {
       setJdDataLoading(true);
       setJdHoursOfOperation(null);
+      setJdEngineHours(null);
       setJdMachineAlerts(null);
       Promise.all([
         equipmentJDAPI.hoursOfOperation(selectedAsset.jd_asset_id).then((r) => r.data).catch(() => null),
+        equipmentJDAPI.engineHours(selectedAsset.jd_asset_id).then((r) => r.data).catch(() => null),
         equipmentJDAPI.machineAlerts(selectedAsset.jd_asset_id).then((r) => r.data).catch(() => null),
-      ]).then(([hours, alerts]) => {
+      ]).then(([hours, engineHours, alerts]) => {
         setJdHoursOfOperation(hours);
+        setJdEngineHours(engineHours);
         setJdMachineAlerts(alerts);
         setJdDataLoading(false);
       }).catch(() => setJdDataLoading(false));
     } else {
       setJdHoursOfOperation(null);
+      setJdEngineHours(null);
       setJdMachineAlerts(null);
     }
   }, [selectedAsset?.jd_asset_id]);
@@ -719,6 +724,24 @@ function EquipmentModule({ user, onLogout }) {
                   <div className="jd-data-sections" style={{ marginTop: '1.5rem', borderTop: '1px solid #eee', paddingTop: '1rem' }}>
                     <h4 style={{ marginBottom: '0.75rem', color: 'var(--earth-mid)' }}>🚜 John Deere Data</h4>
                     {jdDataLoading && <p style={{ color: '#666' }}>Loading…</p>}
+                    {!jdDataLoading && jdEngineHours != null && (() => {
+                      const report = jdEngineHours.values?.[0] ?? jdEngineHours;
+                      const hours = report?.totalEngineHours ?? report?.engineHours ?? report?.hours ?? report?.value ?? jdEngineHours.totalEngineHours ?? jdEngineHours.engineHours ?? jdEngineHours.hours ?? jdEngineHours.value;
+                      const timestamp = report?.reportTimestamp ?? report?.timestamp ?? jdEngineHours.reportTimestamp ?? jdEngineHours.timestamp;
+                      const source = report?.source ?? jdEngineHours.source;
+                      const sourceLabel = source === 'TM' ? 'Meter (MTG/UTG)' : source === 'MIG' ? 'Machine Information Gateway' : source === 'CI' ? 'GlobalTracs Terminal' : source;
+                      if (hours == null && !timestamp && !source) return null;
+                      return (
+                        <div className="equipment-subsection" style={{ marginBottom: '1rem' }}>
+                          <h5>Engine hours</h5>
+                          <p style={{ margin: 0, fontSize: '0.95rem' }}>
+                            {hours != null && <strong>{Number(hours).toLocaleString(undefined, { maximumFractionDigits: 1 })} hrs</strong>}
+                            {timestamp && <span style={{ display: 'block', color: '#666', marginTop: '0.25rem' }}>Reported {new Date(timestamp).toLocaleString()}</span>}
+                            {sourceLabel && <span style={{ display: 'block', color: '#666', fontSize: '0.85rem' }}>Source: {sourceLabel}</span>}
+                          </p>
+                        </div>
+                      );
+                    })()}
                     {!jdDataLoading && jdHoursOfOperation != null && (
                       <div className="equipment-subsection" style={{ marginBottom: '1rem' }}>
                         <h5>Hours of operation</h5>

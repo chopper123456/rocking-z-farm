@@ -191,16 +191,18 @@ async function getJDAccess() {
   return { accessToken, orgId: enabledOrg.id, org: enabledOrg };
 }
 
-// Helper: extract equipment fields from JD Equipment API or platform response (flat or nested)
+// Helper: extract equipment fields from JD Equipment API or platform response (flat or nested).
+// Per JD docs: prefer EquipmentType / EquipmentApexType for type; Category is legacy and may be deprecated.
+// Implements (planter, disk, corn head, spray boom) are equipment paired with a machine.
 function parseJDMachine(item) {
   const name = item.name || item.displayName || item.title || item.description || (item.model && (item.model.displayName || item.model.name)) || (Array.isArray(item.model) ? item.model[0]?.name : null) || item.id || 'Unknown';
   const jdId = item.id || item['@id'] || item.assetId || item.machineId || item.principalId;
   if (jdId == null || jdId === '') return null;
 
-  // Equipment API: make/type/model are objects (or arrays) with .name
   const makeObj = item.make;
   const make = typeof makeObj === 'string' ? makeObj : (makeObj?.name || (Array.isArray(makeObj) && makeObj[0]?.name) || item.brand || null);
-  const typeObj = item.type || item.isgType;
+  // EquipmentType (recommended) > EquipmentApexType (ag) > type / isgType > legacy category
+  const typeObj = item.equipmentType || item.equipmentApexType || item.type || item.isgType;
   const typeName = typeof typeObj === 'string' ? typeObj : (typeObj?.name || (Array.isArray(typeObj) && typeObj[0]?.name) || item.category || null);
   const modelVal = item.model;
   const model = typeof modelVal === 'string' ? modelVal : (modelVal && (modelVal.name || modelVal.displayName || modelVal.modelName)) || (Array.isArray(modelVal) && modelVal[0]?.name) || item.modelName || null;
@@ -208,7 +210,13 @@ function parseJDMachine(item) {
   const serialNumber = item.serialNumber || item.serial || item.serialNo || null;
   const hours = item.hours != null ? parseFloat(item.hours) : item.totalEngineHours != null ? parseFloat(item.totalEngineHours) : item.engineHours != null ? parseFloat(item.engineHours) : (item.meters && item.meters.engineHours != null) ? parseFloat(item.meters.engineHours) : null;
   const typeRaw = (typeName || item.category || item.kind || 'machine').toLowerCase();
-  const catMap = { tractor: 'tractor', combine: 'combine', sprayer: 'sprayer', implement: 'implement', machine: 'tractor', harvester: 'combine', applicator: 'sprayer', 'four-wheel drive tractor': 'tractor', 'two-wheel drive': 'tractor' };
+  const catMap = {
+    tractor: 'tractor', combine: 'combine', sprayer: 'sprayer', implement: 'implement',
+    machine: 'tractor', harvester: 'combine', applicator: 'sprayer',
+    'four-wheel drive tractor': 'tractor', 'two-wheel drive': 'tractor',
+    planter: 'implement', disk: 'implement', 'corn head': 'implement', 'spray boom': 'implement',
+    planter: 'implement', disk: 'implement', cultivator: 'implement', seeder: 'implement',
+  };
   const category = catMap[typeRaw] || (item['@type'] === 'Implement' ? 'implement' : 'tractor');
 
   return { name, jdId: String(jdId), make, model, year, serialNumber, hours, category, raw: item };
@@ -647,7 +655,7 @@ router.get('/machines/:jdAssetId/hours-of-operation', async (req, res) => {
   }
 });
 
-// JD machine data: engine hours
+// JD machine data: engine hours (GET /machines/{principalId}/engineHours; OAuth scope: eq1; no eTag)
 router.get('/machines/:jdAssetId/engine-hours', async (req, res) => {
   try {
     const jd = await getJDAccess();
@@ -657,6 +665,7 @@ router.get('/machines/:jdAssetId/engine-hours', async (req, res) => {
       headers: {
         Authorization: `Bearer ${jd.accessToken}`,
         Accept: 'application/vnd.deere.axiom.v3+json',
+        'Accept-Encoding': 'gzip',
       },
     });
     res.json(response.data);
