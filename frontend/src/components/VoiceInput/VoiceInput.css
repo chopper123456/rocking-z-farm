@@ -1,0 +1,24 @@
+.voice-input-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--earth-mid);
+  border-radius: 12px;
+  background: var(--white);
+  color: var(--earth-dark);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.voice-input-btn.listening {
+  background: rgba(42, 90, 46, 0.1);
+  border-color: var(--earth-dark);
+}
+
+.voice-input-label {
+  font-size: 0.9rem;
+  color: #666;
+}

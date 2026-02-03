@@ -1,0 +1,108 @@
+/* Install prompt banner */
+.install-prompt {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  background: linear-gradient(135deg, var(--earth-dark), var(--earth-mid));
+  color: var(--white);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.install-prompt-content {
+  max-width: 400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.install-prompt-icon {
+  font-size: 2rem;
+}
+
+.install-prompt-text {
+  margin: 0;
+  font-size: 0.95rem;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.install-prompt-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.install-prompt-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.6rem 1.25rem;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.install-prompt-btn.primary {
+  background: var(--white);
+  color: var(--earth-dark);
+}
+
+.install-prompt-btn.secondary {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--white);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+}
+
+.install-prompt-btn:active {
+  transform: scale(0.98);
+}
+
+/* Offline indicator */
+.offline-indicator {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  padding: 0.6rem 1rem;
+  padding-top: max(0.6rem, env(safe-area-inset-top));
+  background: #d32f2f;
+  color: var(--white);
+  font-size: 0.9rem;
+  text-align: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+.offline-indicator-text {
+  display: block;
+}
+
+.offline-indicator.syncing {
+  background: var(--earth-mid);
+}
+
+/* Reserve space so fixed offline bar doesn't cover content */
+body.has-offline-bar {
+  padding-top: 48px;
+}

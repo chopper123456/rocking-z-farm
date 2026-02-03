@@ -9,6 +9,10 @@ import FieldsModule from './components/Modules/FieldsModule';
 import EquipmentModule from './components/Modules/EquipmentModule';
 import GrainModule from './components/Modules/GrainModule';
 import InventoryModule from './components/Modules/InventoryModule';
+import InstallPrompt from './components/PWA/InstallPrompt';
+import OfflineIndicator from './components/PWA/OfflineIndicator';
+import BottomNav from './components/Layout/BottomNav';
+import './components/PWA/PWA.css';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -16,16 +20,23 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-    
     if (token && userData) {
       setIsAuthenticated(true);
       setUser(JSON.parse(userData));
     }
     setLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      document.body.classList.add('has-bottom-nav');
+    } else {
+      document.body.classList.remove('has-bottom-nav');
+    }
+    return () => document.body.classList.remove('has-bottom-nav');
+  }, [isAuthenticated]);
 
   const handleLogin = (token, userData, rememberMe = false) => {
     if (rememberMe) {
@@ -65,6 +76,13 @@ function App() {
 
   return (
     <Router>
+      {isAuthenticated && (
+        <>
+          <OfflineIndicator />
+          <InstallPrompt />
+          <BottomNav />
+        </>
+      )}
       <Routes>
         <Route 
           path="/login" 

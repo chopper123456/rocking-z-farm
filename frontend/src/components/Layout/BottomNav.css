@@ -1,0 +1,82 @@
+/* Bottom nav: visible on mobile/tablet, hidden on desktop */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  background: var(--white);
+  box-shadow: 0 -2px 20px var(--shadow);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bottom-nav-inner {
+  max-width: 100%;
+  display: flex;
+  justify-content: space-around;
+  align-items: stretch;
+}
+
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.25rem;
+  min-height: 56px;
+  min-width: 0;
+  color: #666;
+  text-decoration: none;
+  font-size: 0.7rem;
+  font-weight: 500;
+  transition: color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-nav-item:hover,
+.bottom-nav-item:focus {
+  color: var(--earth-dark);
+  background: rgba(42, 90, 46, 0.06);
+}
+
+.bottom-nav-item.active {
+  color: var(--earth-dark);
+  font-weight: 600;
+}
+
+.bottom-nav-item.active .bottom-nav-icon {
+  transform: scale(1.1);
+}
+
+.bottom-nav-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  transition: transform 0.15s;
+}
+
+.bottom-nav-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .bottom-nav {
+    display: block;
+  }
+
+  /* Reserve space above bottom nav so content isn't hidden */
+  body.has-bottom-nav {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (min-width: 1025px) {
+  body.has-bottom-nav {
+    padding-bottom: 0;
+  }
+}

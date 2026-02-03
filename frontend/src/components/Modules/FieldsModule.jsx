@@ -1,12 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../Layout/Header';
 import axios from 'axios';
 import { fieldsAPI, fieldsJDAPI, API_URL } from '../../utils/api';
+import { useOffline } from '../../contexts/OfflineContext';
+import { setCachedFields } from '../../utils/offlineDB';
+import CameraCapture from '../Camera/CameraCapture';
+import { SkeletonFieldList } from '../ui/LoadingSkeleton';
+import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import './FieldsModule.css';
 
 function FieldsModule({ user, onLogout }) {
   const navigate = useNavigate();
+  const { isOnline, getCachedFields, cacheFields, queueScoutingReport } = useOffline();
   const [fields, setFields] = useState([]);
   const [selectedField, setSelectedField] = useState(null);
   const [selectedYear, setSelectedYear] = useState(null);
@@ -58,7 +64,8 @@ function FieldsModule({ user, onLogout }) {
     diseaseNotes: '',
     generalNotes: '',
     weatherConditions: '',
-    photo: null
+    photo: null,
+    capturedPhotos: [] // from CameraCapture: [{ blob, name, gps? }]
   });
 
   const [yieldUpload, setYieldUpload] = useState({
@@ -86,24 +93,37 @@ function FieldsModule({ user, onLogout }) {
     loadFields();
   }, [onMapOnly]);
 
+  const { pullRef, pullStyle, pulling } = usePullToRefresh(loadFields);
+
   useEffect(() => {
     if (selectedField && selectedYear && yearDetails) {
       loadTimelineAndStats();
     }
   }, [selectedField, selectedYear, yearDetails]);
 
-  const loadFields = async () => {
+  const loadFields = useCallback(async () => {
     try {
       setLoading(true);
+      if (!navigator.onLine) {
+        const cached = await getCachedFields();
+        setFields(cached || []);
+        return;
+      }
       const response = await fieldsAPI.getAll({ onMapOnly: onMapOnly });
-      setFields(response.data);
+      setFields(response.data || []);
+      await setCachedFields(response.data || []);
     } catch (error) {
       console.error('Error loading fields:', error);
-      alert('Failed to load fields');
+      if (!navigator.onLine) {
+        const cached = await getCachedFields();
+        setFields(cached || []);
+      } else {
+        alert('Failed to load fields');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [onMapOnly, getCachedFields]);
 
   const loadYears = async (fieldName) => {
     try {
@@ -471,12 +491,47 @@ function FieldsModule({ user, onLogout }) {
 
   const handleAddScoutingNote = async (e) => {
     e.preventDefault();
+    const photoToUse = (scoutingNote.capturedPhotos && scoutingNote.capturedPhotos[0])
+      ? scoutingNote.capturedPhotos[0]
+      : scoutingNote.photo
+        ? { blob: scoutingNote.photo, name: scoutingNote.photo.name || 'photo.jpg' }
+        : null;
+
+    if (!navigator.onLine && photoToUse?.blob) {
+      await queueScoutingReport({
+        fieldName: selectedField.field_name,
+        year: selectedYear,
+        reportDate: scoutingNote.reportDate,
+        growthStage: scoutingNote.growthStage,
+        pestPressure: scoutingNote.pestPressure,
+        weedPressure: scoutingNote.weedPressure,
+        diseaseNotes: scoutingNote.diseaseNotes,
+        generalNotes: scoutingNote.generalNotes,
+        weatherConditions: scoutingNote.weatherConditions,
+        photoBlob: photoToUse.blob,
+        photoName: photoToUse.name
+      });
+      setShowAddScouting(false);
+      setScoutingNote({
+        reportDate: new Date().toISOString().split('T')[0],
+        growthStage: '',
+        pestPressure: 'Low',
+        weedPressure: 'Low',
+        diseaseNotes: '',
+        generalNotes: '',
+        weatherConditions: '',
+        photo: null,
+        capturedPhotos: []
+      });
+      alert('Saved offline. Will sync when you\'re back online.');
+      return;
+    }
 
     try {
       const token = localStorage.getItem('token');
       const formData = new FormData();
-      if (scoutingNote.photo) {
-        formData.append('photo', scoutingNote.photo);
+      if (photoToUse?.blob) {
+        formData.append('photo', photoToUse.blob, photoToUse.name || 'photo.jpg');
       }
       formData.append('fieldName', selectedField.field_name);
       formData.append('year', selectedYear);
@@ -489,7 +544,7 @@ function FieldsModule({ user, onLogout }) {
       formData.append('weatherConditions', scoutingNote.weatherConditions);
 
       await axios.post(`${API_URL}/scouting-reports`, formData, {
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         }
@@ -504,7 +559,8 @@ function FieldsModule({ user, onLogout }) {
         diseaseNotes: '',
         generalNotes: '',
         weatherConditions: '',
-        photo: null
+        photo: null,
+        capturedPhotos: []
       });
       await loadTimelineAndStats();
       alert('Scouting report added successfully!');
@@ -621,8 +677,13 @@ function FieldsModule({ user, onLogout }) {
               </label>
             </div>
 
+            <div
+              className="pull-refresh-wrap"
+              ref={pullRef}
+              style={pullStyle}
+            >
             {loading ? (
-              <div className="loading">Loading fields...</div>
+              <SkeletonFieldList />
             ) : filteredFields.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-state-icon">🌱</div>
@@ -651,6 +712,10 @@ function FieldsModule({ user, onLogout }) {
                   </div>
                 ))}
               </div>
+            )}
+            </div>
+            {pulling && (
+              <div className="pull-refresh-indicator" aria-hidden>↻ Refreshing...</div>
             )}
           </>
         )}
@@ -1116,10 +1181,16 @@ function FieldsModule({ user, onLogout }) {
                 </div>
                 <div className="form-group">
                   <label>Photo (optional)</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setScoutingNote({...scoutingNote, photo: e.target.files[0]})}
+                  <CameraCapture
+                    withGps
+                    maxPhotos={1}
+                    onPhotos={(photos) =>
+                      setScoutingNote((prev) => ({
+                        ...prev,
+                        capturedPhotos: photos,
+                        photo: photos[0]?.blob || null
+                      }))
+                    }
                   />
                 </div>
                 <button type="submit" className="btn-primary">Add Report</button>

@@ -825,3 +825,16 @@
     width: 100%;
   }
 }
+
+/* Pull to refresh */
+.pull-refresh-wrap {
+  min-height: 120px;
+  transition: transform 0.15s ease-out;
+}
+
+.pull-refresh-indicator {
+  text-align: center;
+  padding: 0.75rem;
+  font-size: 0.9rem;
+  color: var(--earth-mid);
+}

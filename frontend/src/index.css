@@ -53,3 +53,38 @@ button {
 input, textarea, select {
   font-family: inherit;
 }
+
+/* Mobile-first: touch targets min 44px, safe areas */
+@media (max-width: 1024px) {
+  button,
+  .action-btn,
+  .add-button,
+  .menu-trigger,
+  .bottom-nav-item,
+  input[type="submit"],
+  input[type="button"],
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .module-card,
+  .field-card,
+  .year-card {
+    min-height: 72px;
+    padding: 1rem 1.25rem;
+  }
+
+  /* Prevent zoom on focus for inputs (iOS) */
+  input, textarea, select {
+    font-size: 16px;
+  }
+}
+
+/* Safe area for notched devices */
+@supports (padding: env(safe-area-inset-top)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}

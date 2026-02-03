@@ -4,11 +4,19 @@
   "private": true,
   "description": "Rocking Z Farm Management System - Frontend",
   "dependencies": {
+    "@use-gesture/react": "^10.3.1",
+    "axios": "^1.6.2",
+    "date-fns": "^3.0.0",
+    "html5-qrcode": "^2.3.8",
+    "idb": "^8.0.3",
+    "jspdf": "^4.1.0",
+    "jspdf-autotable": "^5.0.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0",
-    "axios": "^1.6.2",
-    "date-fns": "^3.0.0"
+    "react-spring": "^10.0.3",
+    "vite-plugin-pwa": "^1.2.0",
+    "workbox-window": "^7.4.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",

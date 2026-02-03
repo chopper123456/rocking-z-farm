@@ -1,0 +1,135 @@
+.camera-capture {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.camera-capture-error {
+  color: #d32f2f;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.camera-capture-gps {
+  font-size: 0.85rem;
+  color: var(--earth-mid);
+  margin: 0;
+}
+
+.camera-capture-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.camera-capture-btn {
+  min-height: 48px;
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 500;
+  border: 2px solid var(--earth-mid);
+  background: var(--white);
+  color: var(--earth-dark);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.camera-capture-btn.primary {
+  background: var(--earth-dark);
+  color: var(--white);
+  border-color: var(--earth-dark);
+}
+
+.camera-capture-btn.secondary {
+  background: #f5f5f5;
+  color: #333;
+  border-color: #ddd;
+}
+
+.camera-capture-btn.submit {
+  margin-top: 0.5rem;
+}
+
+.camera-capture-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.camera-capture-video-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.camera-capture-video {
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #000;
+}
+
+.camera-capture-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.camera-capture-preview-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.camera-capture-preview-label {
+  width: 100%;
+  margin: 0 0 0.25rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.camera-capture-preview-item {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.camera-capture-preview-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.camera-capture-preview-gps {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  font-size: 0.75rem;
+}
+
+.camera-capture-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--white);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
