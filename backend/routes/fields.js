@@ -5,13 +5,19 @@ const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
 
-// Get all fields
+// Get all fields (optional: ?onMapOnly=true to show only fields on JD map, i.e. jd_field_id set)
 router.get('/', async (req, res) => {
   try {
-    const result = await db.query(
-      'SELECT * FROM fields WHERE user_id = $1 ORDER BY field_name',
-      [req.user.userId]
-    );
+    const onMapOnly = req.query.onMapOnly === 'true' || req.query.onMapOnly === '1';
+    const result = onMapOnly
+      ? await db.query(
+          'SELECT * FROM fields WHERE user_id = $1 AND jd_field_id IS NOT NULL ORDER BY field_name',
+          [req.user.userId]
+        )
+      : await db.query(
+          'SELECT * FROM fields WHERE user_id = $1 ORDER BY field_name',
+          [req.user.userId]
+        );
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching fields:', error);

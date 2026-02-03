@@ -48,7 +48,7 @@ export const livestockAPI = {
 
 // Fields API
 export const fieldsAPI = {
-  getAll: () => api.get('/fields'),
+  getAll: (params) => api.get('/fields', { params }), // params: { onMapOnly: true }
   create: (data) => api.post('/fields', data),
   update: (id, data) => api.put(`/fields/${id}`, data),
   delete: (id) => api.delete(`/fields/${id}`),

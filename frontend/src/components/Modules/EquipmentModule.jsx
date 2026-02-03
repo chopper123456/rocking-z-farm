@@ -448,7 +448,7 @@ function EquipmentModule({ user, onLogout }) {
                   checked={activeOnly}
                   onChange={(e) => setActiveOnly(e.target.checked)}
                 />
-                <span>Active only</span>
+                <span>On map only</span>
               </label>
             </div>
 
@@ -457,10 +457,20 @@ function EquipmentModule({ user, onLogout }) {
             ) : filteredEquipment.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-state-icon">🚜</div>
-                <p>No equipment yet. Add manually or sync from John Deere.</p>
-                <button className="add-button" style={{ marginTop: '1rem' }} onClick={() => setShowAddEquipment(true)}>
-                  + Add Equipment
-                </button>
+                <p>
+                  {activeOnly
+                    ? 'No equipment on map. Sync from John Deere above, or turn off "On map only" to see all equipment.'
+                    : 'No equipment yet. Add manually or sync from John Deere.'}
+                </p>
+                {activeOnly ? (
+                  <button type="button" className="add-button" style={{ marginTop: '1rem' }} onClick={() => setActiveOnly(false)}>
+                    Show all equipment
+                  </button>
+                ) : (
+                  <button className="add-button" style={{ marginTop: '1rem' }} onClick={() => setShowAddEquipment(true)}>
+                    + Add Equipment
+                  </button>
+                )}
               </div>
             ) : (
               <div className="equipment-list">

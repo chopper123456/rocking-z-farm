@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../Layout/Header';
 import axios from 'axios';
-import { fieldsJDAPI } from '../../utils/api';
+import { fieldsAPI, fieldsJDAPI } from '../../utils/api';
 import './FieldsModule.css';
 
 function FieldsModule({ user, onLogout }) {
@@ -28,6 +28,7 @@ function FieldsModule({ user, onLogout }) {
   const [showManageField, setShowManageField] = useState(false);
   const [syncingFieldsJD, setSyncingFieldsJD] = useState(false);
   const [syncFieldsMessage, setSyncFieldsMessage] = useState(null);
+  const [onMapOnly, setOnMapOnly] = useState(true);
 
   const [newField, setNewField] = useState({
     fieldName: '',
@@ -79,10 +80,13 @@ function FieldsModule({ user, onLogout }) {
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
-    loadFields();
     // Auto-sync fields from John Deere on page load (silent background sync)
     handleSyncFieldsFromJD(true);
   }, []);
+
+  useEffect(() => {
+    loadFields();
+  }, [onMapOnly]);
 
   useEffect(() => {
     if (selectedField && selectedYear && yearDetails) {
@@ -93,10 +97,7 @@ function FieldsModule({ user, onLogout }) {
   const loadFields = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/fields`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await fieldsAPI.getAll({ onMapOnly: onMapOnly });
       setFields(response.data);
     } catch (error) {
       console.error('Error loading fields:', error);
@@ -599,13 +600,23 @@ function FieldsModule({ user, onLogout }) {
               </div>
             )}
 
-            <div className="search-bar">
-              <input
-                type="text"
-                placeholder="🔍 Search fields..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+            <div className="fields-list-controls" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <div className="search-bar" style={{ flex: 1, minWidth: '200px' }}>
+                <input
+                  type="text"
+                  placeholder="🔍 Search fields..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <label className="on-map-only-toggle" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.95rem', color: '#333', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={onMapOnly}
+                  onChange={(e) => setOnMapOnly(e.target.checked)}
+                />
+                <span>On map only</span>
+              </label>
             </div>
 
             {loading ? (
@@ -613,7 +624,16 @@ function FieldsModule({ user, onLogout }) {
             ) : filteredFields.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-state-icon">🌱</div>
-                <p>No fields yet. Click "Add Field" to create your first field.</p>
+                <p>
+                  {onMapOnly
+                    ? 'No fields on map. Sync from John Deere above, or turn off "On map only" to see all fields.'
+                    : 'No fields yet. Click "Add Field" to create your first field.'}
+                </p>
+                {onMapOnly && (
+                  <button type="button" className="add-button" style={{ marginTop: '1rem' }} onClick={() => setOnMapOnly(false)}>
+                    Show all fields
+                  </button>
+                )}
               </div>
             ) : (
               <div className="field-list">
