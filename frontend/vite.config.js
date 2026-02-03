@@ -18,10 +18,9 @@ export default defineConfig({
         orientation: 'portrait-primary',
         scope: '/',
         start_url: '/',
-        // Single data-URL icon so manifest works without /icons/ files; add PNGs to public/icons/ for better install icon
+        // 1x1 placeholder so manifest is valid; add icon-192.png / icon-512.png to public/icons/ for real install icon
         icons: [
-          { src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', sizes: '512x512', type: 'image/png', purpose: 'any' }
+          { src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', sizes: '1x1', type: 'image/png', purpose: 'any' }
         ],
         categories: ['business', 'productivity'],
         shortcuts: [

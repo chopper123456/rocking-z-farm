@@ -86,18 +86,6 @@ function FieldsModule({ user, onLogout }) {
     handleSyncFieldsFromJD(true);
   }, []);
 
-  useEffect(() => {
-    loadFields();
-  }, [onMapOnly]);
-
-  const { pullRef, pullStyle, pulling } = usePullToRefresh(loadFields);
-
-  useEffect(() => {
-    if (selectedField && selectedYear && yearDetails) {
-      loadTimelineAndStats();
-    }
-  }, [selectedField, selectedYear, yearDetails]);
-
   const loadFields = useCallback(async () => {
     try {
       setLoading(true);
@@ -110,6 +98,18 @@ function FieldsModule({ user, onLogout }) {
       setLoading(false);
     }
   }, [onMapOnly]);
+
+  useEffect(() => {
+    loadFields();
+  }, [onMapOnly]);
+
+  const { pullRef, pullStyle, pulling } = usePullToRefresh(loadFields);
+
+  useEffect(() => {
+    if (selectedField && selectedYear && yearDetails) {
+      loadTimelineAndStats();
+    }
+  }, [selectedField, selectedYear, yearDetails]);
 
   const loadYears = async (fieldName) => {
     try {
