@@ -68,13 +68,13 @@ router.post('/login', [
 
     // Generate JWT token
     const token = jwt.sign(
-      { 
+      {
         userId: user.id,
         username: user.username,
         isAdmin: user.is_admin
       },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: '30d', algorithm: 'HS256' }
     );
 
     console.log(`Successful login for user: ${username} (${user.is_admin ? 'ADMIN' : 'USER'}) from IP: ${req.ip}`);

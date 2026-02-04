@@ -10,9 +10,16 @@ router.use(authMiddleware);
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
-const upload = multer({ 
+const upload = multer({
   storage: storage,
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit for yield map files
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit for yield map files
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || file.mimetype.startsWith('image/') || file.mimetype === 'application/zip') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF, image, or ZIP files allowed'), false);
+    }
+  },
 });
 
 // Get yield map for a field/year
@@ -52,8 +59,9 @@ router.get('/download/:fieldName/:year', async (req, res) => {
     }
     
     const map = result.rows[0];
-    res.setHeader('Content-Type', map.map_file_type);
-    res.setHeader('Content-Disposition', `attachment; filename="${map.map_file_name}"`);
+    const safeName = (map.map_file_name || 'yield-map').replace(/[\r\n"]/g, '').slice(0, 200) || 'yield-map';
+    res.setHeader('Content-Type', map.map_file_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
     res.send(map.map_file_data);
   } catch (error) {
     console.error('Error downloading yield map:', error);

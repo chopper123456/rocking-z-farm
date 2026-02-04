@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
+const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 
@@ -35,6 +35,7 @@ const apiLimiter = rateLimit({
 });
 
 // Middleware
+app.use(helmet({ contentSecurityPolicy: false })); // CSP off to avoid breaking Vercel/API; other headers enabled
 // CORS - only allow requests from your domains
 app.use(cors({
   origin: function(origin, callback) {

@@ -6,7 +6,7 @@ const authMiddleware = (req, res, next) => {
     if (!token) {
       return res.status(401).json({ error: 'No authentication token, access denied' });
     }
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     req.user = {
       userId: decoded.userId,
       username: decoded.username,

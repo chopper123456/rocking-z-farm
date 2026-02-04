@@ -1,14 +1,15 @@
-# Performance & Security Audit — Rocking Z Farm
+# Deep Performance & Security Audit — Rocking Z Farm
 
-**Date:** February 2, 2025  
-**Scope:** Backend (Express, PostgreSQL), Frontend (React, Vite), auth, file uploads, API, dependencies.
+**Date:** February 3, 2026  
+**Scope:** Backend (Express, PostgreSQL), Frontend (React, Vite), PWA, auth, file uploads, API, dependencies.
 
 ---
 
 ## Executive summary
 
-- **Security:** Strong baseline (auth, rate limiting, CORS, parameterized SQL). Several hardening fixes were applied; a few items remain for you to decide (CORS previews, dependency upgrades).
-- **Performance:** DB pooling and compression are in place; optional improvements are documented (indexes, production sourcemaps).
+- **Security:** Strong baseline (auth, rate limiting, CORS, parameterized SQL, file filters). This audit applied additional hardening: JWT algorithm pinning, Helmet security headers, yield map filename sanitization and file filter, and documented remaining recommendations.
+- **Performance:** DB pooling, compression, and frontend code-splitting are in place. Optional improvements (indexes, lazy routes) are documented.
+- **Dependencies:** Backend has 2 high (tar via node-pre-gyp); frontend has 2 moderate (esbuild via Vite dev server). Mitigations and upgrade paths are noted below.
 
 ---
 
@@ -18,56 +19,61 @@
 
 | Area | Status |
 |------|--------|
-| **Authentication** | JWT with Bearer token; auth middleware on protected routes. |
-| **Passwords** | bcrypt hashing; min length and validation on register/reset. |
+| **Authentication** | JWT with Bearer token; auth middleware on protected routes; **JWT algorithm pinned to HS256** (this audit). |
+| **Passwords** | bcrypt hashing; min 8 chars; validation on register/reset. |
 | **Rate limiting** | Login: 5/15 min; API: 100/15 min. |
 | **CORS** | Restricted to Vercel domains + localhost; credentials allowed. |
 | **Request size** | JSON/urlencoded limited to 10MB. |
-| **SQL** | Parameterized queries (`$1`, `$2`) everywhere; no string concatenation into SQL. |
-| **File uploads (equipment)** | Multer: 10MB limit; fileFilter allows only PDF and images. |
+| **SQL** | Parameterized queries (`$1`, `$2`) everywhere; no string concatenation. |
+| **File uploads** | Multer: 10MB (field reports, scouting, equipment); 50MB (yield maps). fileFilter on field reports (PDF + images), scouting (images), equipment (PDF + images), **yield maps (PDF + images + ZIP)** (this audit). |
+| **Content-Disposition** | Filenames sanitized (strip `\r\n"`, max 200 chars) on field reports download; **yield map download** (this audit). |
 | **Secrets** | `.env` in `.gitignore`; JWT and JD credentials from env. |
 | **Error details** | Stack traces only in development. |
 | **Admin actions** | Register, toggle user, reset password, activity log gated by `isAdmin`. |
+| **XSS** | No `dangerouslySetInnerHTML`, `eval`, or `innerHTML` in frontend. |
+| **Security headers** | **Helmet** added (this audit); CSP disabled to avoid breaking SPA/API; X-Content-Type-Options, X-Frame-Options, etc. enabled. |
 
 ### 1.2 Fixes applied in this audit
 
-1. **Activity log DoS** — `GET /api/auth/activity-log?limit=...` now clamps `limit` to 1–500 (default 100). Prevents large queries.
-2. **Content-Disposition header injection** — Download endpoints for equipment receipts and field reports now sanitize filenames (strip `\r`, `\n`, `"`; max 200 chars) before setting `Content-Disposition`.
-3. **Field reports file type** — Multer for field reports now has a `fileFilter` allowing only PDF and images (aligned with equipment receipts).
-4. **JWT_SECRET in production** — Server exits on startup if `NODE_ENV=production` and `JWT_SECRET` is not set.
-5. **Production sourcemaps** — Vite build disables sourcemaps in production to avoid exposing full source.
+1. **JWT algorithm** — `jwt.sign` uses `algorithm: 'HS256'`; `jwt.verify` uses `algorithms: ['HS256']` to prevent algorithm confusion.
+2. **Helmet** — `helmet()` middleware added; CSP disabled; other headers (X-DNS-Prefetch-Control, X-Frame-Options, X-Content-Type-Options, etc.) enabled.
+3. **Yield map download** — Content-Disposition filename sanitized (strip `\r\n"`, max 200 chars).
+4. **Yield map upload** — Multer `fileFilter` added: only PDF, image, or ZIP.
 
 ### 1.3 Recommendations (your choice)
 
 | Item | Risk | Recommendation |
 |------|------|----------------|
-| **CORS `*.vercel.app`** | Any Vercel preview can call your API. | If you need strict control, replace `origin.endsWith('.vercel.app')` with an explicit list of preview URLs or remove it. |
-| **Backend: tar / node-pre-gyp** | `npm audit` reports high severity in transitive deps (tar). | Your app doesn’t use tar directly; risk is low. Optional: `npm audit fix` (if it doesn’t break things) or wait for upstream fixes in pg/tooling. |
-| **Frontend: esbuild / Vite** | Moderate advisory for dev server. | Affects only `vite` dev server, not production build. Optional: upgrade Vite when convenient (`npm audit fix --force` can be breaking). |
-| **Token in localStorage** | XSS could steal token. | Mitigation: keep dependencies updated, avoid rendering user HTML. Future: consider httpOnly cookies for tokens. |
-| **Script: ADMIN_PASSWORD fallback** | `migrateToIndividualAccounts.js` has a default password in code. | Don’t run that script in production; or remove the fallback and require `ADMIN_PASSWORD` in env. |
+| **CORS `*.vercel.app`** | Any Vercel preview can call your API. | For strict control, replace `origin.endsWith('.vercel.app')` with an explicit list or remove. |
+| **Token in localStorage** | XSS could steal token. | Keep deps updated; avoid rendering user HTML. Future: consider httpOnly cookies for tokens. |
+| **Stored file names** | `req.file.originalname` stored as-is; path traversal in filename is mitigated by not writing to disk. | Optional: sanitize (e.g. basename, strip non-printable) before storing. |
+| **Input validation** | Fields, grain, inventory routes accept body without express-validator. | Optional: add validation/sanitization for string length and type on create/update. |
+| **ORG_USER_ID** | Defaults to 1 if not set. | Set `ORG_USER_ID` in production if you use multi-tenant or different org ID. |
 
 ---
 
 ## 2. Performance
 
-### 2.1 What’s already in place
+### 2.1 What’s in place
 
 | Area | Status |
 |------|--------|
 | **DB connection pool** | `pg` Pool: max 20, idleTimeout 30s, connectionTimeout 2s. |
-| **Compression** | `compression()` middleware for responses. |
-| **Equipment indexes** | Migration creates indexes on `equipment_assets` (user_id, jd_asset_id), `equipment_maintenance` (equipment_asset_id). |
-| **John Deere sync** | Field operations pagination (nextPage); equipment sync uses parameterized queries. |
+| **Compression** | `compression()` middleware on responses. |
+| **Frontend bundle** | `manualChunks`: vendor-react, vendor-utils; chunkSizeWarningLimit 600. |
+| **Sourcemaps** | Disabled in production (`sourcemap: process.env.NODE_ENV !== 'production'`). |
+| **PWA caching** | NetworkFirst for `/api/*`; CacheFirst for images. |
+| **Equipment indexes** | Migration creates indexes on equipment_assets (user_id, jd_asset_id), equipment_maintenance (equipment_asset_id). |
 
-### 2.2 Recommendations (optional)
+### 2.2 Optional improvements
 
 | Item | Suggestion |
 |------|------------|
-| **Indexes** | If `fields`, `field_operations`, or `field_reports` grow large, add indexes on `user_id` (and `field_name`/`year` where you filter). |
-| **Sourcemaps** | Already disabled for production builds; no change needed. |
-| **Heavy lists** | If equipment or field lists get very large, consider pagination or virtual scrolling on the frontend. |
-| **Frontend bundle** | Current stack is small; if you add heavy libs later, use dynamic imports for rarely used modules. |
+| **DB indexes** | If `fields`, `field_reports`, `field_operations`, or `scouting_reports` grow large, add indexes on `user_id` and (where you filter) `field_name`, `year`. Example: `CREATE INDEX IF NOT EXISTS idx_field_reports_user_field_year ON field_reports(user_id, field_name, year);` |
+| **SSL for DB** | If Railway or provider uses SSL, ensure `DATABASE_URL` includes `?sslmode=require` or pool config has `ssl: { rejectUnauthorized: true }`. |
+| **Lazy routes** | For very large apps, lazy-load route components: `const FieldsModule = lazy(() => import('./Modules/FieldsModule'));` and wrap in `<Suspense>`. |
+| **Heavy lists** | If equipment or field lists grow very large, consider pagination or virtual scrolling (e.g. react-window) on the frontend. |
+| **API response size** | Scouting report detail returns photo as base64; for many reports consider separate image URLs or pagination. |
 
 ---
 
@@ -75,13 +81,13 @@
 
 ### Backend
 
-- **High:** `tar` (via `@mapbox/node-pre-gyp`) — path sanitization / symlink issues. Not used directly by your code; risk is low. Optional: run `npm audit fix` and test; if nothing breaks, keep it.
-- **Action taken:** `npm audit fix` was run; no automatic fix was available for this transitive chain. Documented for awareness.
+- **High (2):** `tar` (via `@mapbox/node-pre-gyp`) — path overwrite/symlink issues. Not used directly by your code; risk is in native dependency install.  
+  **Action:** Run `npm audit fix` if available; otherwise monitor and upgrade `pg` when a fixed transitive release is available.
 
 ### Frontend
 
-- **Moderate:** `esbuild` (via Vite) — dev server request handling. Does **not** affect production build or deployed app.
-- **Action:** No change required for production. Optional: upgrade Vite when you’re ready (may require testing).
+- **Moderate (2):** `esbuild` (via Vite) — dev server request handling. **Does not affect production build or deployed app.**  
+  **Action:** No change required for production. Optional: upgrade Vite when convenient (`npm audit fix --force` may be breaking).
 
 ---
 
@@ -89,25 +95,26 @@
 
 | File | Change |
 |------|--------|
-| `backend/server.js` | Require `JWT_SECRET` when `NODE_ENV=production`; exit with clear error if missing. |
-| `backend/routes/auth.js` | Activity log `limit` clamped to 1–500. |
-| `backend/routes/equipmentMaintenance.js` | Sanitize receipt filename in `Content-Disposition`. |
-| `backend/routes/fieldReports.js` | Sanitize report filename in `Content-Disposition`; add multer `fileFilter` (PDF + images). |
-| `frontend/vite.config.js` | Disable sourcemaps when building for production. |
+| `backend/server.js` | Added Helmet (CSP disabled). |
+| `backend/middleware/auth.js` | `jwt.verify(..., { algorithms: ['HS256'] })`. |
+| `backend/routes/auth.js` | `jwt.sign(..., { algorithm: 'HS256' })`. |
+| `backend/routes/yieldMaps.js` | Content-Disposition filename sanitized; Multer fileFilter (PDF, image, ZIP). |
+| `backend/package.json` | Added `helmet` dependency. |
 
 ---
 
-## 5. Checklist for deployment (Railway / Vercel)
+## 5. Checklist for deployment
 
-- [ ] `JWT_SECRET` set in Railway (and strong; e.g. 32+ random chars).
+- [ ] `JWT_SECRET` set in Railway (32+ random chars).
 - [ ] `DATABASE_URL` (or DB_*) set in Railway.
-- [ ] John Deere: `JOHN_DEERE_CLIENT_ID`, `JOHN_DEERE_CLIENT_SECRET`, `JOHN_DEERE_CALLBACK_URL` set where used.
-- [ ] Frontend: `VITE_API_URL` points to your production API (if different from default).
+- [ ] John Deere env vars set where used.
+- [ ] Frontend `VITE_API_URL` points to production API if needed.
 - [ ] No `.env` or secrets committed; `.gitignore` includes `.env`, `.env.local`, `.env.production`.
+- [ ] `ORG_USER_ID` set in production if not using default 1.
 
 ---
 
-## 6. Re-running checks later
+## 6. Re-running checks
 
 ```bash
 # Backend
@@ -117,4 +124,4 @@ cd backend && npm audit
 cd frontend && npm audit
 ```
 
-For deeper security scanning you can add: `snyk` or `npm audit --audit-level=high` in CI.
+For deeper scanning: `npx snyk test` or `npm audit --audit-level=high` in CI.
