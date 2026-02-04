@@ -18,9 +18,12 @@ export default defineConfig({
         orientation: 'portrait-primary',
         scope: '/',
         start_url: '/',
-        // 1x1 placeholder so manifest is valid; add icon-192.png / icon-512.png to public/icons/ for real install icon
+        // Home screen icon: add your logo as icon-192.png and icon-512.png in frontend/public/icons/
         icons: [
-          { src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', sizes: '1x1', type: 'image/png', purpose: 'any' }
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ],
         categories: ['business', 'productivity'],
         shortcuts: [
