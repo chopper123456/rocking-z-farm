@@ -11,6 +11,69 @@ router.use(authMiddleware);
 
 const JD_API_URL = 'https://sandboxapi.deere.com/platform';
 
+// Extract GeoJSON geometry from a John Deere boundary response (various shapes).
+function extractBoundaryGeometry(boundaryObj) {
+  if (!boundaryObj || typeof boundaryObj !== 'object') return null;
+  const g = boundaryObj.geometry ?? boundaryObj.geojson ?? boundaryObj;
+  if (!g || typeof g !== 'object') return null;
+  if (g.type && (g.type === 'Polygon' || g.type === 'MultiPolygon') && Array.isArray(g.coordinates)) {
+    return { type: g.type, coordinates: g.coordinates };
+  }
+  if (Array.isArray(g.coordinates)) {
+    return { type: 'Polygon', coordinates: g.coordinates };
+  }
+  if (Array.isArray(boundaryObj.coordinates)) {
+    return { type: 'Polygon', coordinates: boundaryObj.coordinates };
+  }
+  return null;
+}
+
+// Fetch boundaries for one field and return GeoJSON or null.
+async function fetchFieldBoundaries(accessToken, orgId, jdFieldId, headers) {
+  let boundariesUrl = `${JD_API_URL}/organizations/${orgId}/fields/${jdFieldId}/boundaries`;
+  const boundaries = [];
+
+  while (boundariesUrl) {
+    try {
+      const res = await axios.get(boundariesUrl, { headers });
+      const list = res.data.values ?? res.data.members ?? res.data ?? [];
+      const arr = Array.isArray(list) ? list : [list];
+      for (const b of arr) {
+        if (!b) continue;
+        const geom = extractBoundaryGeometry(b);
+        if (geom) {
+          boundaries.push(geom);
+          break; // use first valid boundary
+        }
+        const selfLink = (b.links ?? []).find((l) => l.rel === 'self' || l.rel === 'boundary');
+        const uri = selfLink?.uri ?? b.id ?? b['@id'];
+        if (uri) {
+          try {
+            const fullUrl = uri.startsWith('http') ? uri : `${JD_API_URL}${uri.startsWith('/') ? '' : '/'}${uri}`;
+            const detailRes = await axios.get(fullUrl, { headers });
+            const g = extractBoundaryGeometry(detailRes.data);
+            if (g) {
+              boundaries.push(g);
+              break;
+            }
+          } catch (_) {
+            // skip this boundary
+          }
+        }
+      }
+      if (boundaries.length > 0) break;
+      const nextLink = res.data.links?.find((l) => l.rel === 'nextPage' || l.rel === 'next');
+      boundariesUrl = nextLink?.uri ?? null;
+    } catch (err) {
+      if (err.response?.status === 404 || err.response?.status === 403) return null;
+      console.warn('JD boundaries error for field', jdFieldId, err.response?.status, err.message);
+      return null;
+    }
+  }
+
+  return boundaries.length > 0 ? boundaries[0] : null;
+}
+
 async function getJDAccess() {
   const token = await getValidJohnDeereAccessToken(db, ORG_USER_ID);
   if (token.error) return { error: token.error };
@@ -133,10 +196,32 @@ router.post('/sync', requireAdmin, async (req, res) => {
       }
     }
 
+    // Fetch and store boundary geometry for each field that has jd_field_id
+    let boundariesSynced = 0;
+    const fieldRows = await db.query(
+      'SELECT id, jd_field_id FROM fields WHERE user_id = $1 AND jd_field_id IS NOT NULL',
+      [ORG_USER_ID]
+    );
+    for (const row of fieldRows.rows || []) {
+      try {
+        const geom = await fetchFieldBoundaries(accessToken, orgId, row.jd_field_id, headers);
+        if (geom) {
+          await db.query(
+            'UPDATE fields SET boundary_geojson = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            [JSON.stringify(geom), row.id]
+          );
+          boundariesSynced++;
+        }
+      } catch (err) {
+        console.warn('Boundary fetch failed for field id', row.id, err.message);
+      }
+    }
+
     res.json({
-      message: `Synced fields from John Deere. ${fieldsAdded} new, ${fieldsUpdated} updated.`,
+      message: `Synced fields from John Deere. ${fieldsAdded} new, ${fieldsUpdated} updated.${boundariesSynced > 0 ? ` ${boundariesSynced} boundary(ies) saved.` : ''}`,
       fieldsAdded,
       fieldsUpdated,
+      boundariesSynced,
     });
   } catch (error) {
     const status = error.response?.status;

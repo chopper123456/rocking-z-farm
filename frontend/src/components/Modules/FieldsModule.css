@@ -777,6 +777,57 @@
   color: #666;
 }
 
+.boundary-section {
+  background: #f0f7f0;
+  border: 1px solid rgba(var(--earth-mid-rgb, 76, 135, 82), 0.2);
+}
+
+.boundary-summary {
+  font-size: 0.95rem;
+  color: var(--earth-dark);
+  margin-bottom: 0.75rem !important;
+}
+
+.boundary-coords-wrap {
+  position: relative;
+  margin-top: 0.5rem;
+}
+
+.boundary-coords {
+  display: block;
+  max-height: 200px;
+  overflow: auto;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-family: ui-monospace, monospace;
+  white-space: pre;
+  color: #333;
+}
+
+.copy-boundary-btn {
+  margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  background: var(--earth-mid);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.copy-boundary-btn:hover {
+  filter: brightness(1.1);
+}
+
+.boundary-empty {
+  color: #888;
+  font-style: italic;
+}
+
 .danger-zone {
   background: #fff5f5;
   border: 2px solid #ffebee;

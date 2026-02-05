@@ -38,11 +38,12 @@ async function runEquipmentMigration(db) {
   `);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_equipment_assets_active ON equipment_assets(is_active);`);
 
-  // Fields table: JD link columns (add if table exists from initDatabase)
+  // Fields table: JD link columns + boundary geometry (add if table exists from initDatabase)
   try {
     await db.query(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS jd_field_id VARCHAR(255);`);
     await db.query(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS jd_farm_id VARCHAR(255);`);
     await db.query(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS farm_name VARCHAR(255);`);
+    await db.query(`ALTER TABLE fields ADD COLUMN IF NOT EXISTS boundary_geojson JSONB;`);
   } catch (e) {
     // fields table may not exist yet
   }

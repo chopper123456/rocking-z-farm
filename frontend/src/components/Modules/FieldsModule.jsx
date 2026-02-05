@@ -8,6 +8,24 @@ import { SkeletonFieldList } from '../ui/LoadingSkeleton';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import './FieldsModule.css';
 
+function formatBoundaryCoordinates(geojson) {
+  if (!geojson?.coordinates) return '';
+  const coords = geojson.coordinates;
+  if (geojson.type === 'Polygon' && Array.isArray(coords[0])) {
+    return coords[0].map((c) => `  [${c[0]}, ${c[1]}]`).join('\n');
+  }
+  if (geojson.type === 'MultiPolygon' && Array.isArray(coords)) {
+    return coords.map((poly, i) => poly[0].map((c) => `  [${c[0]}, ${c[1]}]`).join('\n')).join('\n\n');
+  }
+  return JSON.stringify(coords, null, 2);
+}
+
+function copyBoundaryToClipboard(geojson) {
+  if (!geojson) return;
+  const text = JSON.stringify(geojson, null, 2);
+  navigator.clipboard.writeText(text).then(() => alert('Coordinates copied to clipboard.')).catch(() => alert('Copy failed.'));
+}
+
 function FieldsModule({ user, onLogout }) {
   const navigate = useNavigate();
   const [fields, setFields] = useState([]);
@@ -1301,6 +1319,35 @@ function FieldsModule({ user, onLogout }) {
                   <p><strong>Soil Type:</strong> {selectedField.soil_type || 'Not set'}</p>
                   <p><strong>Irrigation:</strong> {selectedField.irrigation_type || 'Not set'}</p>
                   {selectedField.notes && <p><strong>Notes:</strong> {selectedField.notes}</p>}
+                </div>
+
+                <div className="manage-section boundary-section">
+                  <h4>Boundary (from John Deere)</h4>
+                  {selectedField.boundary_geojson ? (
+                    <>
+                      <p className="boundary-summary">
+                        {selectedField.boundary_geojson.type === 'MultiPolygon'
+                          ? `MultiPolygon: ${selectedField.boundary_geojson.coordinates?.length ?? 0} polygon(s)`
+                          : 'Polygon: ' + (selectedField.boundary_geojson.coordinates?.[0]?.length ?? 0) + ' point(s)'}
+                      </p>
+                      <div className="boundary-coords-wrap">
+                        <pre className="boundary-coords">
+                          {formatBoundaryCoordinates(selectedField.boundary_geojson)}
+                        </pre>
+                        <button
+                          type="button"
+                          className="copy-boundary-btn"
+                          onClick={() => copyBoundaryToClipboard(selectedField.boundary_geojson)}
+                        >
+                          Copy coordinates
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="boundary-empty">
+                      No boundary data. Use &quot;Sync fields from John Deere&quot; on the Fields list to fetch boundaries.
+                    </p>
+                  )}
                 </div>
                 
                 <div className="manage-section danger-zone">
