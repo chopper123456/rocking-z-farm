@@ -841,6 +841,25 @@ function FieldsModule({ user, onLogout }) {
                 <div className="quick-stat">🌿 {stats.tissueReports} Tissue Samples</div>
                 {stats.yieldMap && <div className="quick-stat">📊 Yield Map</div>}
               </div>
+
+              <div className="year-boundary-block">
+                <h4 className="year-boundary-title">Boundary coordinates</h4>
+                {selectedField.boundary_geojson ? (
+                  <p className="year-boundary-has">
+                    {selectedField.boundary_geojson.type === 'MultiPolygon'
+                      ? `${selectedField.boundary_geojson.coordinates?.length ?? 0} polygon(s)`
+                      : (selectedField.boundary_geojson.coordinates?.[0]?.length ?? 0) + ' point(s)'} from John Deere.
+                    {' '}
+                    <button type="button" className="year-boundary-btn" onClick={() => setShowManageField(true)}>
+                      View / copy coordinates
+                    </button>
+                  </p>
+                ) : (
+                  <p className="year-boundary-none">
+                    No boundary data. Use &quot;Sync fields from John Deere&quot; on the Fields list to fetch boundaries.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="action-buttons-grid">

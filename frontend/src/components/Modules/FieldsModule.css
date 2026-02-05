@@ -828,6 +828,49 @@
   font-style: italic;
 }
 
+.year-boundary-block {
+  margin-top: 1rem;
+  padding: 1rem 1.25rem;
+  background: #f0f7f0;
+  border-radius: 10px;
+  border: 1px solid rgba(76, 135, 82, 0.25);
+}
+
+.year-boundary-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.1rem;
+  color: var(--earth-dark);
+  margin: 0 0 0.5rem 0;
+  letter-spacing: 0.5px;
+}
+
+.year-boundary-has,
+.year-boundary-none {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+.year-boundary-none {
+  color: #666;
+  font-style: italic;
+}
+
+.year-boundary-btn {
+  margin-left: 0.25rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  background: var(--earth-mid);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.year-boundary-btn:hover {
+  filter: brightness(1.1);
+}
+
 .danger-zone {
   background: #fff5f5;
   border: 2px solid #ffebee;

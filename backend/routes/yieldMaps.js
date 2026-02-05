@@ -22,7 +22,7 @@ const upload = multer({
   },
 });
 
-// Get yield map for a field/year
+// Get yield map for a field/year (200 + null when none - avoids 404 for optional data)
 router.get('/:fieldName/:year', async (req, res) => {
   try {
     const result = await db.query(
@@ -34,7 +34,7 @@ router.get('/:fieldName/:year', async (req, res) => {
     );
     
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Yield map not found' });
+      return res.status(200).json(null);
     }
     
     res.json(result.rows[0]);
