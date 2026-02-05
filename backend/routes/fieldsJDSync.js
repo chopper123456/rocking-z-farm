@@ -11,9 +11,59 @@ router.use(authMiddleware);
 
 const JD_API_URL = 'https://sandboxapi.deere.com/platform';
 
-// Extract GeoJSON geometry from a John Deere boundary response (various shapes).
+// John Deere boundary format: multipolygon = [ polygon ], polygon = { rings: [ ring ] }, ring = { points: [ point ] }.
+// Point can be { longitude, latitude }, { lng, lat }, { x, y }, or [ lng, lat ].
+function pointToLngLat(p) {
+  if (!p) return null;
+  if (Array.isArray(p) && p.length >= 2) return [Number(p[0]), Number(p[1])];
+  if (typeof p === 'object') {
+    const lng = p.longitude ?? p.lng ?? p.x;
+    const lat = p.latitude ?? p.lat ?? p.y;
+    if (lng != null && lat != null) return [Number(lng), Number(lat)];
+  }
+  return null;
+}
+
+// Convert JD multipolygon (polygons with rings with points) to GeoJSON MultiPolygon coordinates.
+function jdMultipolygonToGeoJSON(multipolygon) {
+  if (!Array.isArray(multipolygon) || multipolygon.length === 0) return null;
+  const polygons = [];
+  for (const polygon of multipolygon) {
+    const rings = polygon?.rings ?? polygon;
+    if (!Array.isArray(rings) || rings.length === 0) continue;
+    const ringCoords = [];
+    for (const ring of rings) {
+      const points = ring?.points ?? ring;
+      if (!Array.isArray(points) || points.length < 3) continue;
+      const coords = [];
+      for (const pt of points) {
+        const c = pointToLngLat(pt);
+        if (c) coords.push(c);
+      }
+      if (coords.length >= 3) {
+        // Close ring if not already
+        const first = coords[0];
+        const last = coords[coords.length - 1];
+        if (first[0] !== last[0] || first[1] !== last[1]) coords.push([first[0], first[1]]);
+        ringCoords.push(coords);
+      }
+    }
+    if (ringCoords.length > 0) polygons.push(ringCoords);
+  }
+  if (polygons.length === 0) return null;
+  return polygons;
+}
+
+// Extract GeoJSON geometry from a John Deere boundary response (JD format + GeoJSON).
 function extractBoundaryGeometry(boundaryObj) {
   if (!boundaryObj || typeof boundaryObj !== 'object') return null;
+
+  // John Deere native: boundary has multipolygon (list of polygon with rings/points)
+  const jdMulti = boundaryObj.multipolygon ?? boundaryObj.multiPolygon;
+  if (Array.isArray(jdMulti)) {
+    const coordinates = jdMultipolygonToGeoJSON(jdMulti);
+    if (coordinates) return { type: 'MultiPolygon', coordinates };
+  }
 
   // GeoJSON Feature
   if (boundaryObj.type === 'Feature' && boundaryObj.geometry) {
@@ -42,6 +92,15 @@ function extractBoundaryGeometry(boundaryObj) {
   return null;
 }
 
+// Pick first boundary that has geometry; prefer active. Return GeoJSON or null.
+function pickBoundaryGeometry(boundariesList) {
+  if (!Array.isArray(boundariesList) || boundariesList.length === 0) return null;
+  const withGeom = boundariesList.map((b) => ({ b, geom: extractBoundaryGeometry(b), active: b.active === true })).
+    filter((x) => x.geom);
+  const active = withGeom.find((x) => x.active);
+  return (active ?? withGeom[0])?.geom ?? null;
+}
+
 // Fetch boundaries for one field and return GeoJSON or null.
 async function fetchFieldBoundaries(accessToken, orgId, jdFieldId, headers) {
   // 1) Field-level: GET /organizations/{orgId}/fields/{fieldId}/boundaries
@@ -53,11 +112,12 @@ async function fetchFieldBoundaries(accessToken, orgId, jdFieldId, headers) {
       const list = res.data.values ?? res.data.members ?? res.data ?? [];
       const arr = Array.isArray(list) ? list : [list];
 
+      // Prefer active boundary; try inline geometry first
+      const inlineGeom = pickBoundaryGeometry(arr);
+      if (inlineGeom) return inlineGeom;
+
       for (const b of arr) {
         if (!b) continue;
-        const geom = extractBoundaryGeometry(b);
-        if (geom) return geom;
-
         const selfLink = (b.links ?? []).find((l) => l.rel === 'self' || l.rel === 'boundary');
         const uri = selfLink?.uri ?? b.id ?? b['@id'];
         if (uri) {
@@ -202,10 +262,11 @@ router.post('/sync', requireAdmin, async (req, res) => {
       }
     }
 
-    // Fetch fields: GET /organizations/{orgId}/fields
+    // Fetch fields with boundaries embedded: GET /organizations/{orgId}/fields?embed=boundaries
     let fieldsAdded = 0;
     let fieldsUpdated = 0;
-    let nextFieldsUrl = `${JD_API_URL}/organizations/${orgId}/fields`;
+    let boundariesSyncedFromEmbed = 0;
+    let nextFieldsUrl = `${JD_API_URL}/organizations/${orgId}/fields?embed=boundaries`;
 
     while (nextFieldsUrl) {
       try {
@@ -233,18 +294,34 @@ router.post('/sync', requireAdmin, async (req, res) => {
                 [ORG_USER_ID, fieldName]
               );
 
+          let ourFieldId = null;
           if (existing.rows.length > 0) {
+            ourFieldId = existing.rows[0].id;
             await db.query(
               `UPDATE fields SET field_name = $1, acreage = COALESCE($2, acreage), jd_field_id = $3, jd_farm_id = $4, farm_name = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $6`,
-              [fieldName, acreage, String(jdFieldId), jdFarmId ? String(jdFarmId) : null, farmName, existing.rows[0].id]
+              [fieldName, acreage, String(jdFieldId), jdFarmId ? String(jdFarmId) : null, farmName, ourFieldId]
             );
             fieldsUpdated++;
           } else {
-            await db.query(
-              `INSERT INTO fields (user_id, field_name, acreage, jd_field_id, jd_farm_id, farm_name) VALUES ($1, $2, $3, $4, $5, $6)`,
+            const insertResult = await db.query(
+              `INSERT INTO fields (user_id, field_name, acreage, jd_field_id, jd_farm_id, farm_name) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
               [ORG_USER_ID, fieldName, acreage, String(jdFieldId), jdFarmId ? String(jdFarmId) : null, farmName]
             );
+            ourFieldId = insertResult.rows[0]?.id;
             fieldsAdded++;
+          }
+
+          // Save boundary from embed when present (JD format: boundaries array with multipolygon)
+          if (ourFieldId && f.boundaries) {
+            const embeddedList = Array.isArray(f.boundaries) ? f.boundaries : (f.boundaries.values || f.boundaries.members || []);
+            const geom = pickBoundaryGeometry(Array.isArray(embeddedList) ? embeddedList : [embeddedList]);
+            if (geom) {
+              await db.query(
+                'UPDATE fields SET boundary_geojson = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+                [JSON.stringify(geom), ourFieldId]
+              );
+              boundariesSyncedFromEmbed++;
+            }
           }
         }
 
@@ -261,13 +338,14 @@ router.post('/sync', requireAdmin, async (req, res) => {
       }
     }
 
-    // Fetch and store boundary geometry for each field that has jd_field_id
-    let boundariesSynced = 0;
+    // Fetch and store boundary geometry for fields that didn't get it from embed (GET by ID)
+    let boundariesSynced = boundariesSyncedFromEmbed;
     const fieldRows = await db.query(
-      'SELECT id, jd_field_id FROM fields WHERE user_id = $1 AND jd_field_id IS NOT NULL',
+      'SELECT id, jd_field_id, boundary_geojson FROM fields WHERE user_id = $1 AND jd_field_id IS NOT NULL',
       [ORG_USER_ID]
     );
     for (const row of fieldRows.rows || []) {
+      if (row.boundary_geojson) continue; // already have from embed
       try {
         const geom = await fetchFieldBoundaries(accessToken, orgId, row.jd_field_id, headers);
         if (geom) {
