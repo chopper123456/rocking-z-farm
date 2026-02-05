@@ -14,13 +14,27 @@ const JD_API_URL = 'https://sandboxapi.deere.com/platform';
 // Extract GeoJSON geometry from a John Deere boundary response (various shapes).
 function extractBoundaryGeometry(boundaryObj) {
   if (!boundaryObj || typeof boundaryObj !== 'object') return null;
-  const g = boundaryObj.geometry ?? boundaryObj.geojson ?? boundaryObj;
-  if (!g || typeof g !== 'object') return null;
-  if (g.type && (g.type === 'Polygon' || g.type === 'MultiPolygon') && Array.isArray(g.coordinates)) {
-    return { type: g.type, coordinates: g.coordinates };
+
+  // GeoJSON Feature
+  if (boundaryObj.type === 'Feature' && boundaryObj.geometry) {
+    const out = extractBoundaryGeometry(boundaryObj.geometry);
+    if (out) return out;
   }
-  if (Array.isArray(g.coordinates)) {
-    return { type: 'Polygon', coordinates: g.coordinates };
+  // GeoJSON FeatureCollection - use first feature
+  if (boundaryObj.type === 'FeatureCollection' && Array.isArray(boundaryObj.features) && boundaryObj.features[0]) {
+    const out = extractBoundaryGeometry(boundaryObj.features[0]);
+    if (out) return out;
+  }
+  // Nested geometry keys
+  const g = boundaryObj.geometry ?? boundaryObj.geojson ?? boundaryObj.boundary ?? boundaryObj.shape ?? boundaryObj;
+  if (!g || typeof g !== 'object') return null;
+  // geometries array (use first)
+  const geomSrc = Array.isArray(g.geometries) && g.geometries[0] ? g.geometries[0] : g;
+  if (geomSrc.type && (geomSrc.type === 'Polygon' || geomSrc.type === 'MultiPolygon') && Array.isArray(geomSrc.coordinates)) {
+    return { type: geomSrc.type, coordinates: geomSrc.coordinates };
+  }
+  if (Array.isArray(geomSrc.coordinates)) {
+    return { type: geomSrc.type === 'MultiPolygon' ? 'MultiPolygon' : 'Polygon', coordinates: geomSrc.coordinates };
   }
   if (Array.isArray(boundaryObj.coordinates)) {
     return { type: 'Polygon', coordinates: boundaryObj.coordinates };
@@ -30,21 +44,20 @@ function extractBoundaryGeometry(boundaryObj) {
 
 // Fetch boundaries for one field and return GeoJSON or null.
 async function fetchFieldBoundaries(accessToken, orgId, jdFieldId, headers) {
+  // 1) Field-level: GET /organizations/{orgId}/fields/{fieldId}/boundaries
   let boundariesUrl = `${JD_API_URL}/organizations/${orgId}/fields/${jdFieldId}/boundaries`;
-  const boundaries = [];
 
   while (boundariesUrl) {
     try {
       const res = await axios.get(boundariesUrl, { headers });
       const list = res.data.values ?? res.data.members ?? res.data ?? [];
       const arr = Array.isArray(list) ? list : [list];
+
       for (const b of arr) {
         if (!b) continue;
         const geom = extractBoundaryGeometry(b);
-        if (geom) {
-          boundaries.push(geom);
-          break; // use first valid boundary
-        }
+        if (geom) return geom;
+
         const selfLink = (b.links ?? []).find((l) => l.rel === 'self' || l.rel === 'boundary');
         const uri = selfLink?.uri ?? b.id ?? b['@id'];
         if (uri) {
@@ -52,26 +65,78 @@ async function fetchFieldBoundaries(accessToken, orgId, jdFieldId, headers) {
             const fullUrl = uri.startsWith('http') ? uri : `${JD_API_URL}${uri.startsWith('/') ? '' : '/'}${uri}`;
             const detailRes = await axios.get(fullUrl, { headers });
             const g = extractBoundaryGeometry(detailRes.data);
-            if (g) {
-              boundaries.push(g);
-              break;
-            }
+            if (g) return g;
           } catch (_) {
-            // skip this boundary
+            // skip
           }
         }
       }
-      if (boundaries.length > 0) break;
+
       const nextLink = res.data.links?.find((l) => l.rel === 'nextPage' || l.rel === 'next');
       boundariesUrl = nextLink?.uri ?? null;
     } catch (err) {
-      if (err.response?.status === 404 || err.response?.status === 403) return null;
+      if (err.response?.status === 404 || err.response?.status === 403) break;
       console.warn('JD boundaries error for field', jdFieldId, err.response?.status, err.message);
-      return null;
+      break;
     }
   }
 
-  return boundaries.length > 0 ? boundaries[0] : null;
+  // 2) Fallback: GET /organizations/{orgId}/boundaries and match by field
+  try {
+    let orgBoundariesUrl = `${JD_API_URL}/organizations/${orgId}/boundaries`;
+    while (orgBoundariesUrl) {
+      const res = await axios.get(orgBoundariesUrl, { headers });
+      const list = res.data.values ?? res.data.members ?? res.data ?? [];
+      const arr = Array.isArray(list) ? list : [list];
+      for (const b of arr) {
+        if (!b) continue;
+        const fieldId = b.fieldId ?? b.field?.id ?? (b.links && b.links.find((l) => l.rel === 'field')?.uri?.split('/').pop());
+        if (String(fieldId) !== String(jdFieldId)) continue;
+        const geom = extractBoundaryGeometry(b);
+        if (geom) return geom;
+        const selfLink = (b.links ?? []).find((l) => l.rel === 'self' || l.rel === 'boundary');
+        const uri = selfLink?.uri ?? b.id ?? b['@id'];
+        if (uri) {
+          try {
+            const fullUrl = uri.startsWith('http') ? uri : `${JD_API_URL}${uri.startsWith('/') ? '' : '/'}${uri}`;
+            const detailRes = await axios.get(fullUrl, { headers });
+            const g = extractBoundaryGeometry(detailRes.data);
+            if (g) return g;
+          } catch (_) {}
+        }
+      }
+      const nextLink = res.data.links?.find((l) => l.rel === 'nextPage' || l.rel === 'next');
+      orgBoundariesUrl = nextLink?.uri ?? null;
+    }
+  } catch (err) {
+    if (err.response?.status !== 404 && err.response?.status !== 403) {
+      console.warn('JD org boundaries error', err.response?.status, err.message);
+    }
+  }
+
+  // 3) Fallback: GET field operations, then GET /fieldOperations/{operationId}/boundary
+  try {
+    let opsUrl = `${JD_API_URL}/organizations/${orgId}/fields/${jdFieldId}/fieldOperations`;
+    const opsRes = await axios.get(opsUrl, { headers });
+    const opsList = opsRes.data.values ?? opsRes.data.members ?? opsRes.data ?? [];
+    const ops = Array.isArray(opsList) ? opsList : [opsList];
+    for (const op of ops) {
+      if (!op) continue;
+      const opId = op.id ?? op['@id'] ?? (op.links && op.links.find((l) => l.rel === 'self')?.uri?.split('/').pop());
+      if (!opId) continue;
+      try {
+        const boundaryRes = await axios.get(`${JD_API_URL}/fieldOperations/${opId}/boundary`, { headers });
+        const g = extractBoundaryGeometry(boundaryRes.data);
+        if (g) return g;
+      } catch (_) {}
+    }
+  } catch (err) {
+    if (err.response?.status !== 404 && err.response?.status !== 403) {
+      console.warn('JD field operations boundary error', err.response?.status, err.message);
+    }
+  }
+
+  return null;
 }
 
 async function getJDAccess() {
@@ -217,8 +282,15 @@ router.post('/sync', requireAdmin, async (req, res) => {
       }
     }
 
+    const totalWithJdId = (fieldRows.rows || []).length;
+    const boundaryNote = boundariesSynced === 0 && totalWithJdId > 0
+      ? ' No boundary geometry was returned from John Deere for your fields—your Operations Center fields may not have boundaries drawn, or the sandbox may not include boundary data.'
+      : boundariesSynced > 0
+        ? ` ${boundariesSynced} boundary(ies) saved.`
+        : '';
+
     res.json({
-      message: `Synced fields from John Deere. ${fieldsAdded} new, ${fieldsUpdated} updated.${boundariesSynced > 0 ? ` ${boundariesSynced} boundary(ies) saved.` : ''}`,
+      message: `Synced fields from John Deere. ${fieldsAdded} new, ${fieldsUpdated} updated.${boundaryNote}`,
       fieldsAdded,
       fieldsUpdated,
       boundariesSynced,
